@@ -2,7 +2,7 @@
   "name": "montry-general",
   "version": "1.1.0",
   "private": false,
-  "description": "Deterministic silent vertical reel renderer",
+  "description": "Open-source skills orchestration system with a deterministic Remotion rendering capability",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

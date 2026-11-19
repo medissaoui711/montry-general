@@ -13,30 +13,30 @@ export async function executeWorkflow(
   const outputs: Record<string, unknown> = {};
   const results: TaskExecutionResult[] = [];
 
-  for (const {task} of plan) {
-    const skill = registry.get(task.skill);
+  for (const {task, skillId} of plan) {
+    const skill = registry.get(skillId);
     const input = skill.inputSchema.safeParse(task.input);
     if (!input.success) {
-      results.push({taskId: task.id, skillId: task.skill, status: "failed", error: `Input validation failed: ${input.error.message}`});
+      results.push({taskId: task.id, skillId, status: "failed", error: \`Input validation failed: \${input.error.message}\`});
       break;
     }
     const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
     try {
       const rawOutput = await skill.execute(input.data, {workflowId: definition.id, taskId: task.id, dependencies});
       const output = skill.outputSchema.safeParse(rawOutput);
-      if (!output.success) throw new Error(`Output validation failed: ${output.error.message}`);
+      if (!output.success) throw new Error(\`Output validation failed: \${output.error.message}\`);
       outputs[task.id] = output.data;
-      results.push({taskId: task.id, skillId: task.skill, status: "completed", output: output.data});
+      results.push({taskId: task.id, skillId, status: "completed", output: output.data});
     } catch (error) {
-      results.push({taskId: task.id, skillId: task.skill, status: "failed", error: messageOf(error)});
+      results.push({taskId: task.id, skillId, status: "failed", error: messageOf(error)});
       break;
     }
   }
 
   if (results.length < plan.length) {
     const visited = new Set(results.map((result) => result.taskId));
-    for (const {task} of plan) if (!visited.has(task.id)) {
-      results.push({taskId: task.id, skillId: task.skill, status: "skipped", reason: "Execution stopped after an earlier task failed."});
+    for (const {task, skillId} of plan) if (!visited.has(task.id)) {
+      results.push({taskId: task.id, skillId, status: "skipped", reason: "Execution stopped after an earlier task failed."});
     }
   }
   return {
