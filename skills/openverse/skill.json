@@ -1,0 +1,15 @@
+{
+  "id": "openverse",
+  "version": "1.0.0",
+  "name": "Openverse Audio Search",
+  "description": "Searches openly licensed sound-effect candidates and preserves provenance and licensing metadata.",
+  "capabilities": [
+    "audio.sfx.search"
+  ],
+  "requires": [],
+  "execution": {
+    "kind": "in-process",
+    "status": "implemented",
+    "optional": true
+  }
+}

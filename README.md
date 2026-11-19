@@ -107,6 +107,14 @@ npm run render -- ./examples/reel-input.example.json ./out/demo.mp4 --brand ./ex
 
 The renderer rejects missing logos, sample identity placeholders, invalid dimensions, scripts, event handlers and external network references inside SVG files.
 
+
+## Optional audio providers
+
+- **Openverse** searches openly licensed sound-effect candidates and preserves creator, license, attribution, source-page and duration metadata. Search never downloads or approves an asset.
+- **Earshot** is an optional local CLI adapter for SFX bank listing, WAV generation and model-free SFX checks. It uses a shell-free process bridge with timeouts and output bounds; it is not installed automatically.
+
+See [docs/audio-provider-adapters.md](docs/audio-provider-adapters.md). The core orchestration runtime works without either provider.
+
 ## Current runtime boundary
 
 The in-process runtime is the first orchestration increment. It does not yet claim persistence, retries, parallel scheduling, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot must remain optional adapters behind explicit skill contracts.

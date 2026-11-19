@@ -1,0 +1,17 @@
+{
+  "id": "earshot",
+  "version": "1.0.0",
+  "name": "Earshot SFX Tools",
+  "description": "Optional local CLI provider for listing, generating and checking procedural sound effects.",
+  "capabilities": [
+    "audio.sfx.catalog",
+    "audio.sfx.generate",
+    "audio.sfx.audit"
+  ],
+  "requires": [],
+  "execution": {
+    "kind": "cli",
+    "status": "implemented",
+    "optional": true
+  }
+}
