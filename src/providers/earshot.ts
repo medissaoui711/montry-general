@@ -96,6 +96,21 @@ export class EarshotAdapter {
     if(this.timeoutMs<100||this.timeoutMs>600_000)throw new Error("Earshot timeout must be between 100 and 600000ms.");
     if(this.maxOutputBytes<1024||this.maxOutputBytes>10_000_000)throw new Error("Earshot output limit must be between 1KB and 10MB.");
   }
+  /** Bounded, side-effect-free executable probe for optional-provider registration. */
+  async isAvailable(): Promise<boolean> {
+    try {
+      const result = await this.runner(this.executable, ["--help"], {
+        timeoutMs: Math.min(this.timeoutMs, 5_000),
+        maxOutputBytes: Math.min(this.maxOutputBytes, 16_384),
+        env: this.env,
+        ...(this.cwd === undefined ? {} : {cwd: this.cwd}),
+      });
+      return result.exitCode === 0;
+    } catch {
+      return false;
+    }
+  }
+
   private async run(args:string[]):Promise<EarshotCommandResult> {
     const runnerOptions:EarshotRunnerOptions={
       timeoutMs:this.timeoutMs,maxOutputBytes:this.maxOutputBytes,env:this.env,

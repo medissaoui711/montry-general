@@ -57,6 +57,21 @@ describe("Openverse provider",()=>{
 });
 
 describe("Earshot optional CLI adapter",()=>{
+  it("probes availability with a bounded help command and reports missing executables as unavailable", async () => {
+    const availableRunner = vi.fn(async () => ({stdout: "Earshot help", stderr: "", exitCode: 0}));
+    const availableAdapter = new EarshotAdapter({runner: availableRunner});
+    await expect(availableAdapter.isAvailable()).resolves.toBe(true);
+    expect(availableRunner).toHaveBeenCalledWith("earshot", ["--help"], expect.objectContaining({timeoutMs: 5_000, maxOutputBytes: 16_384}));
+
+    const missingAdapter = new EarshotAdapter({runner: async () => { throw new Error("ENOENT"); }});
+    await expect(missingAdapter.isAvailable()).resolves.toBe(false);
+
+    const unsuccessfulAdapter = new EarshotAdapter({
+      runner: async () => ({stdout: "", stderr: "unsupported", exitCode: 1}),
+    });
+    await expect(unsuccessfulAdapter.isAvailable()).resolves.toBe(false);
+  });
+
   it("uses a shell-free allowlisted argument vector and returns structured output",async()=>{
     const runner=vi.fn(async(_exe:string,args:string[])=>({stdout:'{"sounds":["whoosh_fast/crisp"]}',stderr:"",exitCode:0}));
     const adapter=new EarshotAdapter({runner});
