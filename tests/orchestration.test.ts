@@ -101,6 +101,32 @@ describe("workflow runtime",()=>{
     expect(result.tasks.map((t)=>t.status)).toEqual(["completed","completed","completed"]);
     expect(result.outputs.render).toEqual({asset:"render.mp4"});
   });
+  it("runs independent tasks with the requested concurrency bound", async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const execute = async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      active -= 1;
+      return {ok:true};
+    };
+    const skills = new SkillRegistry().register({
+      id:"parallel.skill",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    const result = await executeWorkflow({id:"parallel",tasks:[
+      {id:"a",skill:"parallel.skill",input:{},dependsOn:[]},
+      {id:"b",skill:"parallel.skill",input:{},dependsOn:[]},
+      {id:"c",skill:"parallel.skill",input:{},dependsOn:[]},
+      {id:"d",skill:"parallel.skill",input:{},dependsOn:[]},
+    ]}, skills, {maxConcurrency:2});
+    expect(result.status).toBe("completed");
+    expect(maximumActive).toBe(2);
+    expect(result.tasks.map((task) => task.status)).toEqual(["completed","completed","completed","completed"]);
+  });
+  it("rejects invalid concurrency settings", async () => {
+    await expect(executeWorkflow({id:"x",tasks:[{id:"a",skill:"creative.brief",input:{topic:"x"},dependsOn:[]}]},makeRegistry(),{maxConcurrency:0})).rejects.toThrow(/between 1 and 16/i);
+  });
   it("executes a capability-selected provider",async()=>{
     const result=await executeWorkflow({id:"provider-flow",tasks:[
       {id:"render",capability:"video.render",input:{format:"mp4"},dependsOn:[]},

@@ -72,3 +72,8 @@ export type WorkflowPlanPreview = {
     requirements: Array<{capability: string; providers: string[]}>;
   }>;
 };
+
+export type WorkflowExecutionOptions = {
+  /** Maximum number of independent tasks to execute concurrently. Defaults to 1. */
+  maxConcurrency?: number;
+};
