@@ -1,5 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {z} from "zod";
+import {planWorkflow} from "../src/orchestration/planner";
 import {SkillRegistry} from "../src/orchestration/registry";
 
 const provider = (id: string) => ({
@@ -17,7 +18,7 @@ describe("provider health and capability resolution", () => {
     const health = registry.getProviderHealth("audio.primary");
     expect(health).toMatchObject({skillId:"audio.primary",status:"healthy"});
     expect(registry.listProviderHealth()).toEqual([health]);
-    expect(() => { (health as {status:string}).status = "unavailable"; }).not.toThrow();
+    (health as {status:string}).status = "unavailable";
     expect(registry.getProviderHealth("audio.primary").status).toBe("healthy");
   });
 
@@ -65,5 +66,17 @@ describe("provider health and capability resolution", () => {
     registry.setProviderHealth("audio.recovered","healthy","Recovered");
     expect(registry.getProviderHealth("audio.recovered")).toMatchObject({status:"healthy",reason:"Recovered"});
     expect(registry.resolveCapability("audio.sfx.search")).toBe("audio.recovered");
+  });
+
+  it("prevents direct skill references from bypassing unavailable provider health", () => {
+    const registry = new SkillRegistry().register(provider("audio.direct"));
+    registry.setProviderHealth("audio.direct","unavailable","Disabled by operator");
+    expect(() => planWorkflow({id:"direct",tasks:[
+      {id:"task",skill:"audio.direct",input:{},dependsOn:[]},
+    ]},registry)).toThrow(/unavailable.*Disabled by operator/i);
+    registry.setProviderHealth("audio.direct","degraded","Reduced service");
+    expect(planWorkflow({id:"direct",tasks:[
+      {id:"task",skill:"audio.direct",input:{},dependsOn:[]},
+    ]},registry)[0]?.skillId).toBe("audio.direct");
   });
 });
