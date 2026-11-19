@@ -99,13 +99,13 @@ export class EarshotAdapter {
   /** Bounded, side-effect-free executable probe for optional-provider registration. */
   async isAvailable(): Promise<boolean> {
     try {
-      await this.runner(this.executable, ["--help"], {
+      const result = await this.runner(this.executable, ["--help"], {
         timeoutMs: Math.min(this.timeoutMs, 5_000),
         maxOutputBytes: Math.min(this.maxOutputBytes, 16_384),
         env: this.env,
         ...(this.cwd === undefined ? {} : {cwd: this.cwd}),
       });
-      return true;
+      return result.exitCode === 0;
     } catch {
       return false;
     }
