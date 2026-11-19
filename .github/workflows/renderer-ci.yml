@@ -1,0 +1,53 @@
+name: Renderer CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, "feat/**"]
+concurrency:
+  group: renderer-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  validate-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Install media inspection tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm run typecheck
+      - run: npm test
+      - name: Ensure Remotion browser
+        run: npx remotion browser ensure
+      - name: Render full-length demo MP4
+        run: npm run render -- ./examples/reel-input.example.json ./out/ci-smoke.mp4 --brand ./examples/brand.example.json
+      - name: Verify MP4 contract
+        shell: bash
+        run: |
+          test -s ./out/ci-smoke.mp4
+          video_contract="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate -of csv=s=x:p=0 ./out/ci-smoke.mp4)"
+          test "$video_contract" = "h264x1080x1920x60/1"
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ./out/ci-smoke.mp4)"
+          awk -v duration="$duration" 'BEGIN { if (duration < 46.19 || duration > 46.21) exit 1 }'
+          audio="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 ./out/ci-smoke.mp4)"
+          test -z "$audio"
+      - name: Extract locked-ending review frames
+        run: |
+          ffmpeg -y -ss 42.2 -i ./out/ci-smoke.mp4 -frames:v 1 ./out/ending-42.2.png
+          ffmpeg -y -ss 43.8 -i ./out/ci-smoke.mp4 -frames:v 1 ./out/ending-43.8.png
+          ffmpeg -y -ss 44.8 -i ./out/ci-smoke.mp4 -frames:v 1 ./out/ending-44.8.png
+          ffmpeg -y -ss 46.1 -i ./out/ci-smoke.mp4 -frames:v 1 ./out/ending-46.1.png
+      - name: Upload smoke-render artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: montry-renderer-smoke-mp4
+          path: |
+            ./out/ci-smoke.mp4
+            ./out/ending-*.png
+          if-no-files-found: error
+          retention-days: 7

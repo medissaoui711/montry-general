@@ -1,0 +1,23 @@
+{
+  "title": "A clear three-part story",
+  "scenes": [
+    {
+      "id": "scene-1",
+      "title": "Start with clarity",
+      "body": "Every strong idea begins with one clear message",
+      "durationSec": 14
+    },
+    {
+      "id": "scene-2",
+      "title": "Build with intention",
+      "body": "Shape each detail into a simple useful experience",
+      "durationSec": 14
+    },
+    {
+      "id": "scene-3",
+      "title": "Finish with identity",
+      "body": "Make the final moment recognizable and memorable",
+      "durationSec": 14.2
+    }
+  ]
+}

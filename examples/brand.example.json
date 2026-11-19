@@ -1,0 +1,37 @@
+{
+  "brand_name": "Montry Demo",
+  "brand_name_local": "مونتري التجريبي",
+  "slogan": "Ideas into motion",
+  "colors": {
+    "bg": "#171717",
+    "text": "#F5F5F4",
+    "accent1": "#0EA5A4",
+    "accent2": "#F97316"
+  },
+  "font": "Cairo",
+  "logo_file": "logo.example.svg",
+  "ending": {
+    "logo": {
+      "width": 360,
+      "height": 360,
+      "left": 360,
+      "top": 520
+    },
+    "line1": {
+      "top": 1000,
+      "from": 42.2,
+      "to": 46.2
+    },
+    "line2": {
+      "top": 1180,
+      "from": 43.8,
+      "to": 46.2
+    },
+    "line3": {
+      "top": 1360,
+      "from": 44.8,
+      "to": 46.2,
+      "dir": "ltr"
+    }
+  }
+}
