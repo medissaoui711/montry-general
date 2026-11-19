@@ -110,13 +110,13 @@ export class SkillRegistry {
     const healthy = providers.filter((id) => this.getProviderHealth(id).status === "healthy");
     if (healthy.length === 1) return healthy[0]!;
     if (healthy.length > 1) {
-      throw new Error(`Capability "${capability}" has multiple healthy providers; choose one: ${healthy.join(", ")}.`);
+      throw new Error(`Capability "${capability}" is ambiguous: multiple healthy providers are available; choose one: ${healthy.join(", ")}.`);
     }
 
     const degraded = providers.filter((id) => this.getProviderHealth(id).status === "degraded");
     if (degraded.length === 1) return degraded[0]!;
     if (degraded.length > 1) {
-      throw new Error(`Capability "${capability}" has multiple degraded providers and no healthy provider; choose one: ${degraded.join(", ")}.`);
+      throw new Error(`Capability "${capability}" is ambiguous: multiple degraded providers are available and no healthy provider exists; choose one: ${degraded.join(", ")}.`);
     }
 
     const statuses = providers.map((id) => {
