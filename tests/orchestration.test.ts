@@ -207,6 +207,98 @@ describe("workflow runtime",()=>{
     ]},skills,{taskTimeoutMs:0})).rejects.toThrow(/taskTimeoutMs/i);
   });
 
+  it("retries only explicitly safe skills and records attempt events", async () => {
+    let calls = 0;
+    const events: string[] = [];
+    const skills = new SkillRegistry().register({
+      id:"retry.safe",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:() => {
+        calls += 1;
+        if (calls < 2) throw new Error("temporary provider failure");
+        return {ok:true};
+      },
+    });
+    const result = await executeWorkflow({id:"safe-retry",tasks:[
+      {id:"task",skill:"retry.safe",input:{},dependsOn:[]},
+    ]},skills,{maxAttempts:3,initialRetryDelayMs:0,onEvent:(event) => events.push(event.type)});
+    expect(result.status).toBe("completed");
+    expect(calls).toBe(2);
+    expect(events).toEqual(["task.started","task.retrying","task.completed"]);
+  });
+
+  it("never retries a skill without an explicit retry-safety declaration", async () => {
+    let calls = 0;
+    const skills = new SkillRegistry().register({
+      id:"retry.unsafe",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:() => { calls += 1; throw new Error("transient failure"); },
+    });
+    const result = await executeWorkflow({id:"unsafe-retry",tasks:[
+      {id:"task",skill:"retry.unsafe",input:{},dependsOn:[]},
+    ]},skills,{maxAttempts:5,initialRetryDelayMs:0});
+    expect(result.status).toBe("failed");
+    expect(calls).toBe(1);
+  });
+
+  it("stops after the configured attempt limit and does not retry timeouts", async () => {
+    let calls = 0;
+    const skills = new SkillRegistry().register({
+      id:"retry.always-fails",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:() => { calls += 1; throw new Error("still unavailable"); },
+    });
+    const exhausted = await executeWorkflow({id:"retry-exhausted",tasks:[
+      {id:"task",skill:"retry.always-fails",input:{},dependsOn:[]},
+    ]},skills,{maxAttempts:3,initialRetryDelayMs:0});
+    expect(exhausted.status).toBe("failed");
+    expect(calls).toBe(3);
+
+    let timeoutCalls = 0;
+    const slow = new SkillRegistry().register({
+      id:"retry.timeout",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:(_input,context) => new Promise<{ok:boolean}>((_resolve,reject) => {
+        timeoutCalls += 1;
+        context.signal.addEventListener("abort",() => reject(new Error("aborted")),{once:true});
+      }),
+    });
+    const timedOut = await executeWorkflow({id:"retry-timeout",tasks:[
+      {id:"task",skill:"retry.timeout",input:{},dependsOn:[]},
+    ]},slow,{maxAttempts:4,taskTimeoutMs:10,initialRetryDelayMs:0});
+    expect(timedOut.status).toBe("failed");
+    expect(timeoutCalls).toBe(1);
+  });
+
+  it("does not retry output-contract failures and validates retry settings", async () => {
+    let calls = 0;
+    const skills = new SkillRegistry().register({
+      id:"retry.bad-output",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:() => { calls += 1; return {wrong:true}; },
+    });
+    const result = await executeWorkflow({id:"bad-output-retry",tasks:[
+      {id:"task",skill:"retry.bad-output",input:{},dependsOn:[]},
+    ]},skills,{maxAttempts:4,initialRetryDelayMs:0});
+    expect(result.status).toBe("failed");
+    expect(calls).toBe(1);
+    await expect(executeWorkflow({id:"bad-retry-limit",tasks:[
+      {id:"task",skill:"retry.bad-output",input:{},dependsOn:[]},
+    ]},skills,{maxAttempts:11})).rejects.toThrow(/maxAttempts/i);
+  });
+
+  it("cancellation during retry backoff prevents the next provider attempt", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const skills = new SkillRegistry().register({
+      id:"retry.cancel",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:() => { calls += 1; throw new Error("temporary failure"); },
+    });
+    const result = await executeWorkflow({id:"retry-cancel",tasks:[
+      {id:"task",skill:"retry.cancel",input:{},dependsOn:[]},
+    ]},skills,{
+      signal:controller.signal,maxAttempts:3,initialRetryDelayMs:1000,
+      onEvent:(event) => { if (event.type === "task.retrying") controller.abort("cancel during backoff"); },
+    });
+    expect(result.status).toBe("cancelled");
+    expect(calls).toBe(1);
+  });
+
   it("blocks invalid inputs and outputs",async()=>{
     const execute=vi.fn(()=>({wrong:true}));
     const skills=new SkillRegistry().register({id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),outputSchema:z.object({value:z.string()}),execute:execute as never});
