@@ -58,8 +58,8 @@ describe("workflow planner",()=>{
       workflowId:"preview-only",taskCount:3,layerCount:2,
       layers:[["audio","brief"],["story"]],
     });
-    expect(preview.tasks[0]).toMatchObject({taskId:"brief",skillId:"brief",version:"1.2.0",layer:0});
-    expect(preview.tasks[1]).toMatchObject({taskId:"audio",skillId:"audio.b",requestedCapability:"audio.search",provider:"audio.b"});
+    expect(preview.tasks[0]).toMatchObject({taskId:"audio",skillId:"audio.b",requestedCapability:"audio.search",provider:"audio.b",layer:0});
+    expect(preview.tasks[1]).toMatchObject({taskId:"brief",skillId:"brief",version:"1.2.0",layer:0});
     expect(preview.tasks[2]?.requirements).toEqual([{capability:"creative.brief",providers:["brief"]}]);
     expect(executeBrief).not.toHaveBeenCalled();
   });
