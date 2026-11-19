@@ -6,7 +6,8 @@ export type RenderArguments = {
 
 export function parseRenderArguments(args: string[]): RenderArguments {
   const brandFlag = args.indexOf("--brand");
-  if (brandFlag >= 0 && (args[brandFlag + 1] === undefined || args[brandFlag + 1].startsWith("--"))) {
+  const brandValue = brandFlag >= 0 ? args[brandFlag + 1] : undefined;
+  if (brandFlag >= 0 && (!brandValue || brandValue.startsWith("--"))) {
     throw new Error("The --brand option requires a JSON file path.");
   }
   if (brandFlag >= 0 && args.lastIndexOf("--brand") !== brandFlag) {
@@ -25,6 +26,6 @@ export function parseRenderArguments(args: string[]): RenderArguments {
   return {
     inputPath,
     outputPath: positionalArgs[1] ?? "out/montry-reel.mp4",
-    brandConfigPath: brandFlag >= 0 ? args[brandFlag + 1]! : "skills/template-reels/brand.json",
+    brandConfigPath: brandFlag >= 0 ? brandValue! : "skills/template-reels/brand.json",
   };
 }
