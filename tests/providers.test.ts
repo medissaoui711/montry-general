@@ -35,7 +35,7 @@ describe("Openverse provider",()=>{
     expect(requestUrl?.searchParams.get("page")).toBe("2");
     expect(result.results).toHaveLength(2);
     expect(result.results[0]).toMatchObject({license:"cc0",attributionRequired:false,durationMs:850,durationSeconds:0.85});
-    expect(result.results[1]).toMatchObject({license:"by",attributionRequired:true,creator:"Creator"});
+    expect(result.results[1]).toMatchObject({license:"by",attributionRequired:true,creator:"Creator",creatorUrl:null,openversePageUrl:"https://openverse.org/audio/by-id"});
     expect(result.results[1]?.attributionText).toContain("Creator");
     expect(result.results.some((item)=>item.license==="by-nc")).toBe(false);
   });
@@ -70,7 +70,7 @@ describe("Earshot optional CLI adapter",()=>{
     const runner=vi.fn(async()=>({stdout:"{}",stderr:"",exitCode:0}));
     const adapter=new EarshotAdapter({runner});
     await expect(adapter.renderSfx({id:"whoosh_fast/crisp",outputPath:"relative.wav"})).rejects.toThrow(/absolute path/i);
-    await expect(adapter.renderSfx({id:"whoosh_fast/crisp",outputPath:path.resolve("out.mp3")})).rejects.toThrow(/\\.wav/i);
+    await expect(adapter.renderSfx({id:"whoosh_fast/crisp",outputPath:path.resolve("out.mp3")})).rejects.toThrow(/\.wav/i);
     await expect(adapter.renderSfx({id:"whoosh_fast/crisp",outputPath:path.resolve("out.wav"),duration:1,apex:2})).rejects.toThrow(/apex cannot exceed/i);
     await expect(adapter.renderSfx({id:"../escape",outputPath:path.resolve("out.wav")})).rejects.toThrow(/sound ID/i);
     expect(runner).not.toHaveBeenCalled();

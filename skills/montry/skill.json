@@ -1,6 +1,6 @@
 {
   "id": "montry",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "name": "Montry Orchestrator",
   "description": "Coordinates specialist skills through explicit contracts and validated workflows.",
   "capabilities": [

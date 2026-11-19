@@ -23,8 +23,8 @@ export const OpenverseSearchInputSchema = z.object({
 }).strict();
 
 export const OpenverseAssetSchema = z.object({
-  id:z.string(), title:z.string(), audioUrl:z.string().url(), sourcePageUrl:z.string().url(),
-  creator:z.string().nullable(), license:z.string(), licenseVersion:z.string().nullable(),
+  id:z.string(), title:z.string(), audioUrl:z.string().url(), openversePageUrl:z.string().url(), sourcePageUrl:z.string().url(),
+  creator:z.string().nullable(), creatorUrl:z.string().url().nullable(), license:z.string(), licenseVersion:z.string().nullable(),
   licenseUrl:z.string().url().nullable(), attributionText:z.string().nullable(),
   attributionRequired:z.boolean(), commercialUseAllowed:z.boolean(), adaptationsAllowed:z.boolean(),
   shareAlike:z.boolean(), durationMs:z.number().nonnegative().nullable(),
@@ -85,13 +85,14 @@ export class OpenverseProvider {
     const results=parsed.data.results.filter((item)=>allowed.has(item.license.toLowerCase())).map((item)=>{
       const license=item.license.toLowerCase();
       const durationMs=item.duration ?? null;
-      const sourcePageUrl=item.foreign_landing_url ?? "https://openverse.org/audio/"+encodeURIComponent(item.id);
+      const openversePageUrl="https://openverse.org/audio/"+encodeURIComponent(item.id);
+      const sourcePageUrl=item.foreign_landing_url ?? openversePageUrl;
       const creator=item.creator ?? null;
       const attributionText=item.attribution ?? (creator
         ? item.title+" by "+creator+" — "+license+(item.license_url?" ("+item.license_url+")":"")
         : null);
       return {
-        id:item.id,title:item.title,audioUrl:item.url,sourcePageUrl,creator,license,
+        id:item.id,title:item.title,audioUrl:item.url,openversePageUrl,sourcePageUrl,creator,creatorUrl:item.creator_url ?? null,license,
         licenseVersion:item.license_version ?? null,licenseUrl:item.license_url ?? null,
         attributionText,attributionRequired:license!=="cc0"&&license!=="pdm",
         commercialUseAllowed:!license.includes("nc"),adaptationsAllowed:!license.includes("nd"),
