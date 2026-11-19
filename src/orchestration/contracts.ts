@@ -41,6 +41,8 @@ export type SkillDefinition<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.Z
   version: z.infer<typeof SkillVersionSchema>;
   capabilities?: string[];
   requires?: string[];
+  /** Explicit opt-in: the provider guarantees repeating execute has no unsafe duplicate side effects. */
+  retrySafe?: boolean;
   inputSchema: I;
   outputSchema: O;
   execute: (input: z.infer<I>, context: SkillExecutionContext) => z.infer<O> | Promise<z.infer<O>>;
@@ -79,17 +81,26 @@ export type WorkflowPlanPreview = {
 };
 
 export type WorkflowExecutionEvent =
-  | {type: "task.started"; workflowId: string; taskId: string; skillId: string; at: number; deadlineAt?: number}
-  | {type: "task.completed"; workflowId: string; taskId: string; skillId: string; at: number}
-  | {type: "task.failed"; workflowId: string; taskId: string; skillId: string; at: number; error: string}
+  | {type: "task.started"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number; deadlineAt?: number}
+  | {type: "task.retrying"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number; nextAttempt: number; delayMs: number; error: string}
+  | {type: "task.completed"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number}
+  | {type: "task.failed"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number; error: string}
   | {type: "task.skipped"; workflowId: string; taskId: string; skillId: string; at: number; reason: string}
   | {type: "task.cancelled"; workflowId: string; taskId: string; skillId: string; at: number; reason: string};
 
 export type WorkflowExecutionOptions = {
   /** Maximum number of independent tasks to execute concurrently. Defaults to 1. */
   maxConcurrency?: number;
-  /** Per-task execution timeout in milliseconds. Must be between 1 and 600000. */
+  /** Per-attempt execution timeout in milliseconds. Must be between 1 and 600000. */
   taskTimeoutMs?: number;
+  /** Maximum provider attempts. Retries occur only for skills explicitly marked retrySafe; defaults to 1. */
+  maxAttempts?: number;
+  /** Initial delay before a retry, in milliseconds. Defaults to 100. */
+  initialRetryDelayMs?: number;
+  /** Exponential backoff multiplier. Must be between 1 and 10; defaults to 2. */
+  retryBackoffMultiplier?: number;
+  /** Maximum retry delay in milliseconds. Must be between 0 and 60000; defaults to 5000. */
+  maxRetryDelayMs?: number;
   /** Cancels active tasks and prevents subsequent tasks from being scheduled. */
   signal?: AbortSignal;
   /** Observer errors are isolated and never fail workflow execution. */
