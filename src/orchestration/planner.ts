@@ -1,4 +1,4 @@
-import {WorkflowSchema, type PlannedTask, type WorkflowDefinition} from "./contracts";
+import {WorkflowSchema, type PlannedTask, type WorkflowDefinition, type WorkflowPlanPreview} from "./contracts";
 import {SkillRegistry} from "./registry";
 
 export function planWorkflow(definition: WorkflowDefinition, registry: SkillRegistry): PlannedTask[] {
@@ -33,4 +33,49 @@ export function planWorkflow(definition: WorkflowDefinition, registry: SkillRegi
     }
   }
   return ordered;
+}
+
+/**
+ * Produces a deterministic, side-effect-free execution preview.
+ * It validates task/provider resolution and the dependency DAG, but never invokes skills.
+ */
+export function previewWorkflow(definition: WorkflowDefinition, registry: SkillRegistry): WorkflowPlanPreview {
+  const plan = planWorkflow(definition, registry);
+  const layerByTask = new Map<string, number>();
+  const layers: string[][] = [];
+
+  const tasks = plan.map(({task, skillId, order}) => {
+    const skill = registry.get(skillId);
+    const layer = task.dependsOn.length === 0
+      ? 0
+      : Math.max(...task.dependsOn.map((dependency) => (layerByTask.get(dependency) ?? 0) + 1));
+    layerByTask.set(task.id, layer);
+    layers[layer] ??= [];
+    layers[layer]!.push(task.id);
+
+    const requirements = (skill.requires ?? []).map((capability) => ({
+      capability,
+      providers: registry.listProviders(capability),
+    }));
+    return {
+      taskId: task.id,
+      skillId,
+      version: skill.version,
+      requestedCapability: task.capability ?? null,
+      provider: task.provider ?? null,
+      dependsOn: [...task.dependsOn],
+      order,
+      layer,
+      capabilities: [...(skill.capabilities ?? [])].sort(),
+      requirements,
+    };
+  });
+
+  return {
+    workflowId: definition.id,
+    taskCount: tasks.length,
+    layerCount: layers.length,
+    layers,
+    tasks,
+  };
 }

@@ -52,3 +52,23 @@ export type WorkflowExecutionResult = {
   tasks: TaskExecutionResult[];
   outputs: Record<string, unknown>;
 };
+
+export type WorkflowPlanPreview = {
+  workflowId: string;
+  taskCount: number;
+  layerCount: number;
+  /** Tasks in the same layer have no dependency ordering between each other. */
+  layers: string[][];
+  tasks: Array<{
+    taskId: string;
+    skillId: string;
+    version: string;
+    requestedCapability: string | null;
+    provider: string | null;
+    dependsOn: string[];
+    order: number;
+    layer: number;
+    capabilities: string[];
+    requirements: Array<{capability: string; providers: string[]}>;
+  }>;
+};
