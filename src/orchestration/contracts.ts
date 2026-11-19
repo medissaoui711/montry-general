@@ -31,6 +31,10 @@ export type SkillExecutionContext = {
   workflowId: string;
   taskId: string;
   dependencies: Readonly<Record<string, unknown>>;
+  /** Aborted when the workflow is cancelled or this task exceeds its timeout. */
+  signal: AbortSignal;
+  /** Unix epoch milliseconds; absent when no task timeout is configured. */
+  deadlineAt?: number;
 };
 export type SkillDefinition<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.ZodTypeAny = z.ZodTypeAny> = {
   id: z.infer<typeof SkillIdSchema>;
@@ -45,10 +49,11 @@ export type PlannedTask = {task: WorkflowTask; skillId: string; order: number};
 export type TaskExecutionResult =
   | {taskId: string; skillId: string; status: "completed"; output: unknown}
   | {taskId: string; skillId: string; status: "failed"; error: string}
-  | {taskId: string; skillId: string; status: "skipped"; reason: string};
+  | {taskId: string; skillId: string; status: "skipped"; reason: string}
+  | {taskId: string; skillId: string; status: "cancelled"; reason: string};
 export type WorkflowExecutionResult = {
   workflowId: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "cancelled";
   tasks: TaskExecutionResult[];
   outputs: Record<string, unknown>;
 };
@@ -73,7 +78,20 @@ export type WorkflowPlanPreview = {
   }>;
 };
 
+export type WorkflowExecutionEvent =
+  | {type: "task.started"; workflowId: string; taskId: string; skillId: string; at: number; deadlineAt?: number}
+  | {type: "task.completed"; workflowId: string; taskId: string; skillId: string; at: number}
+  | {type: "task.failed"; workflowId: string; taskId: string; skillId: string; at: number; error: string}
+  | {type: "task.skipped"; workflowId: string; taskId: string; skillId: string; at: number; reason: string}
+  | {type: "task.cancelled"; workflowId: string; taskId: string; skillId: string; at: number; reason: string};
+
 export type WorkflowExecutionOptions = {
   /** Maximum number of independent tasks to execute concurrently. Defaults to 1. */
   maxConcurrency?: number;
+  /** Per-task execution timeout in milliseconds. Must be between 1 and 600000. */
+  taskTimeoutMs?: number;
+  /** Cancels active tasks and prevents subsequent tasks from being scheduled. */
+  signal?: AbortSignal;
+  /** Observer errors are isolated and never fail workflow execution. */
+  onEvent?: (event: WorkflowExecutionEvent) => void;
 };
