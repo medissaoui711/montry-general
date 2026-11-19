@@ -1,0 +1,38 @@
+{
+  "brand_name": "YOUR_BRAND",
+  "brand_name_local": "اسم علامتك",
+  "slogan": "Your Slogan Here",
+  "colors": {
+    "bg": "#FEF3C7",
+    "text": "#1C1917",
+    "accent1": "#EA5808",
+    "accent2": "#0EA5A4"
+  },
+  "font": "Cairo",
+  "logo_file": "logo-360.svg",
+  "ending": {
+    "logo": {
+      "width": 360,
+      "height": 360,
+      "left": 360,
+      "top": 520
+    },
+    "line1": {
+      "top": 1000,
+      "from": 42.2,
+      "to": 46.2
+    },
+    "line2": {
+      "top": 1180,
+      "from": 43.8,
+      "to": 46.2
+    },
+    "line3": {
+      "top": 1360,
+      "from": 44.8,
+      "to": 46.2,
+      "dir": "ltr"
+    }
+  },
+  "note": "Edit values only. Do not change structure. Replace logo-360.svg with your real logo 360x360."
+}
