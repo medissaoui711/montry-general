@@ -1,6 +1,6 @@
 import {describe, expect, it} from "vitest";
 import {z} from "zod";
-import {SkillImplementationRegistry, SkillRegistry, type SkillCatalog, type SkillManifest} from "../src/orchestration";
+import {SkillImplementationRegistry, SkillRegistry, type SkillCatalog, type SkillManifest, type SkillDefinition} from "../src/orchestration";
 
 const manifest = (overrides: Partial<SkillManifest> = {}): SkillManifest => ({
   id: "audio-pack",
@@ -17,7 +17,7 @@ const catalog = (entry = manifest()): SkillCatalog => ({
   byId: {[entry.id]: entry},
   providers: Object.fromEntries(entry.capabilities.map((capability) => [capability, [entry.id]])),
 });
-const definitions = () => [
+const definitions = (): SkillDefinition[] => [
   {id: "audio.search", version: "1.0.0", capabilities: ["audio.search"], inputSchema: z.object({}), outputSchema: z.object({ok: z.boolean()}), execute: () => ({ok: true})},
   {id: "audio.generate", version: "1.0.0", capabilities: ["audio.generate"], inputSchema: z.object({}), outputSchema: z.object({ok: z.boolean()}), execute: () => ({ok: true})},
 ];
@@ -40,8 +40,8 @@ describe("trusted manifest-to-runtime bindings", () => {
 
   it("rejects version, capability, requirement and execution-kind mismatches", () => {
     const bindings = new SkillImplementationRegistry(catalog(), new SkillRegistry());
-    expect(() => bindings.register("audio-pack", [{...definitions()[0], version: "2.0.0"}], "in-process")).toThrow(/version mismatch/i);
-    expect(() => bindings.register("audio-pack", [definitions()[0]], "in-process")).toThrow(/capability mismatch/i);
+    expect(() => bindings.register("audio-pack", [{...definitions()[0]!, version: "2.0.0"}], "in-process")).toThrow(/version mismatch/i);
+    expect(() => bindings.register("audio-pack", [definitions()[0]!], "in-process")).toThrow(/capability mismatch/i);
     expect(() => bindings.register("audio-pack", definitions(), "cli")).toThrow(/execution kind mismatch/i);
     const requires = manifest({requires: ["media.decode"]});
     expect(() => new SkillImplementationRegistry(catalog(requires), new SkillRegistry()).register("audio-pack", definitions(), "in-process")).toThrow(/requirement mismatch/i);
@@ -50,7 +50,7 @@ describe("trusted manifest-to-runtime bindings", () => {
   it("rejects duplicate bindings and implementation IDs without partial registration", () => {
     const runtime = new SkillRegistry();
     const bindings = new SkillImplementationRegistry(catalog(), runtime);
-    expect(() => bindings.register("audio-pack", [definitions()[0], definitions()[0]], "in-process")).toThrow(/duplicate implementation ID/i);
+    expect(() => bindings.register("audio-pack", [definitions()[0]!, definitions()[0]!], "in-process")).toThrow(/duplicate implementation ID/i);
     expect(runtime.list()).toEqual([]);
     bindings.register("audio-pack", definitions(), "in-process");
     expect(() => bindings.register("audio-pack", definitions(), "in-process")).toThrow(/already bound/i);
