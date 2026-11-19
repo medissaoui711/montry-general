@@ -154,7 +154,7 @@ describe("workflow runtime",()=>{
     const skills = new SkillRegistry()
       .register({
         id:"waiting",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
-        execute:(_input,context) => new Promise((_resolve,reject) => {
+        execute:(_input,context) => new Promise<{ok:boolean}>((_resolve,reject) => {
           markStarted();
           context.signal.addEventListener("abort", () => reject(new Error("provider stopped")), {once:true});
         }),
@@ -177,7 +177,7 @@ describe("workflow runtime",()=>{
     const events: string[] = [];
     const skills = new SkillRegistry().register({
       id:"slow",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
-      execute:(_input,context) => new Promise((_resolve,reject) => {
+      execute:(_input,context) => new Promise<{ok:boolean}>((_resolve,reject) => {
         context.signal.addEventListener("abort", () => {
           observedAbort = context.signal.aborted;
           reject(new Error("provider received abort"));
