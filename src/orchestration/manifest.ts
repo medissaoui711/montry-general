@@ -49,26 +49,26 @@ export async function loadSkillCatalog(rootDirectory: string): Promise<SkillCata
       throw error;
     }
     if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
-      throw new Error(\`Skill manifest must be a regular file: \${manifestPath}\`);
+      throw new Error(`Skill manifest must be a regular file: ${manifestPath}`);
     }
 
     const resolvedManifest = await realpath(manifestPath);
     if (path.dirname(resolvedManifest) !== await realpath(directory)) {
-      throw new Error(\`Skill manifest resolves outside its skill directory: \${manifestPath}\`);
+      throw new Error(`Skill manifest resolves outside its skill directory: ${manifestPath}`);
     }
 
     let raw: unknown;
     try {
       raw = JSON.parse(await readFile(resolvedManifest, "utf8"));
     } catch (error) {
-      throw new Error(\`Unable to read skill manifest "\${manifestPath}": \${error instanceof Error ? error.message : String(error)}\`);
+      throw new Error(`Unable to read skill manifest "${manifestPath}": ${error instanceof Error ? error.message : String(error)}`);
     }
     const parsed = SkillManifestSchema.safeParse(raw);
     if (!parsed.success) {
-      throw new Error(\`Invalid skill manifest "\${manifestPath}": \${parsed.error.message}\`);
+      throw new Error(`Invalid skill manifest "${manifestPath}": ${parsed.error.message}`);
     }
     if (parsed.data.id !== entry.name) {
-      throw new Error(\`Skill manifest ID "\${parsed.data.id}" must match directory "\${entry.name}".\`);
+      throw new Error(`Skill manifest ID "${parsed.data.id}" must match directory "${entry.name}".`);
     }
     manifests.push(parsed.data);
   }
@@ -76,7 +76,7 @@ export async function loadSkillCatalog(rootDirectory: string): Promise<SkillCata
   const byId: Record<string, SkillManifest> = {};
   const providers: Record<string, string[]> = {};
   for (const manifest of manifests) {
-    if (byId[manifest.id]) throw new Error(\`Duplicate skill manifest ID "\${manifest.id}".\`);
+    if (byId[manifest.id]) throw new Error(`Duplicate skill manifest ID "${manifest.id}".`);
     byId[manifest.id] = manifest;
     for (const capability of manifest.capabilities) {
       providers[capability] ??= [];
@@ -87,11 +87,11 @@ export async function loadSkillCatalog(rootDirectory: string): Promise<SkillCata
   for (const manifest of manifests) {
     const duplicateRequirements = manifest.requires.filter((item, index) => manifest.requires.indexOf(item) !== index);
     if (duplicateRequirements.length) {
-      throw new Error(\`Skill "\${manifest.id}" repeats required capability "\${duplicateRequirements[0]}".\`);
+      throw new Error(`Skill "${manifest.id}" repeats required capability "${duplicateRequirements[0]}".`);
     }
     for (const requirement of manifest.requires) {
       if (!providers[requirement]?.length) {
-        throw new Error(\`Skill "\${manifest.id}" requires unavailable capability "\${requirement}".\`);
+        throw new Error(`Skill "${manifest.id}" requires unavailable capability "${requirement}".`);
       }
     }
   }
