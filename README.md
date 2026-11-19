@@ -11,7 +11,7 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 ## Orchestration capabilities
 
 - Versioned skill implementations with Zod input/output contracts.
-- Local \`skill.json\` manifests for discovery and capability indexing.
+- Local `skill.json` manifests for discovery and capability indexing.
 - Capability-based provider selection; ambiguous providers require explicit selection.
 - Workflow tasks may target a stable skill ID or a capability.
 - Stable topological planning with cycle, reference and duplicate validation.
@@ -31,7 +31,7 @@ See [docs/skills-orchestration.md](docs/skills-orchestration.md) and [docs/skill
 
 ## Architecture
 
-\`\`\`
+```
 Workflow Definition
        |
        v
@@ -56,17 +56,17 @@ Skills          Skills      Skills
           Validated Outputs
                   |
             Render / QC
-\`\`\`
+```
 
 ## Repository layout
 
-- \`src/orchestration/\`: contracts, manifest catalog, registry, capability resolver, planner and runtime.
-- \`src/schema.ts\`: brand and reel input contracts.
-- \`src/timeline.ts\`: deterministic frame timeline and word reveal.
-- \`src/Reel.tsx\`: Remotion scene composition and locked ending.
-- \`scripts/render.ts\`: command-line MP4 renderer.
-- \`skills/\`: agent-facing skill instructions and machine-readable manifests.
-- \`tests/\`: contract, catalog, planner, runtime and rendering tests.
+- `src/orchestration/`: contracts, manifest catalog, registry, capability resolver, planner and runtime.
+- `src/schema.ts`: brand and reel input contracts.
+- `src/timeline.ts`: deterministic frame timeline and word reveal.
+- `src/Reel.tsx`: Remotion scene composition and locked ending.
+- `scripts/render.ts`: command-line MP4 renderer.
+- `skills/`: agent-facing skill instructions and machine-readable manifests.
+- `tests/`: contract, catalog, planner, runtime and rendering tests.
 
 ## Requirements
 
@@ -76,34 +76,34 @@ Skills          Skills      Skills
 
 ## Quick start
 
-\`\`\`bash
+```bash
 npm install
 npm run typecheck
 npm test
 npm run studio
-\`\`\`
+```
 
 ## Discover skills
 
-\`\`\`ts
+```ts
 import {loadSkillCatalog} from "./src/orchestration";
 
 const catalog = await loadSkillCatalog("./skills");
 console.log(catalog.skills);
 console.log(catalog.providers["video.render"]);
-\`\`\`
+```
 
-The catalog reads local \`skill.json\` files only. A manifest describes a capability; it does not automatically execute code or install a provider.
+The catalog reads local `skill.json` files only. A manifest describes a capability; it does not automatically execute code or install a provider.
 
 ## Configure a brand
 
-Edit \`skills/template-reels/brand.json\` and replace \`skills/template-reels/logo-360.svg\` with a self-contained 360×360 SVG. For multiple brands, keep each brand JSON and logo in a separate folder and pass \`--brand path/to/brand.json\` to the renderer.
+Edit `skills/template-reels/brand.json` and replace `skills/template-reels/logo-360.svg` with a self-contained 360×360 SVG. For multiple brands, keep each brand JSON and logo in a separate folder and pass `--brand path/to/brand.json` to the renderer.
 
 ## Render an MP4
 
-\`\`\`bash
+```bash
 npm run render -- ./examples/reel-input.example.json ./out/demo.mp4 --brand ./examples/brand.example.json
-\`\`\`
+```
 
 The renderer rejects missing logos, sample identity placeholders, invalid dimensions, scripts, event handlers and external network references inside SVG files.
 
@@ -113,11 +113,11 @@ The in-process runtime is the first orchestration increment. It does not yet cla
 
 ## Quality gates
 
-\`\`\`bash
+```bash
 npm run typecheck
 npm test
 npm run render -- ./examples/reel-input.example.json ./out/demo.mp4 --brand ./examples/brand.example.json
-\`\`\`
+```
 
 A passing unit test suite alone is not proof that a rendered MP4 is visually correct. Inspect output dimensions, frame rate, duration, Arabic/Latin shaping, reveal timing and all locked ending elements.
 

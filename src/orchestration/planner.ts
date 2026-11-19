@@ -9,12 +9,12 @@ export function planWorkflow(definition: WorkflowDefinition, registry: SkillRegi
   const resolvedSkills = new Map<string, string>();
   for (const task of workflow.tasks) {
     const skillId = task.skill ?? registry.resolveCapability(task.capability!, task.provider);
-    if (!registry.has(skillId)) throw new Error(\`Task "\${task.id}" references unregistered skill "\${skillId}".\`);
+    if (!registry.has(skillId)) throw new Error(`Task "${task.id}" references unregistered skill "${skillId}".`);
     resolvedSkills.set(task.id, skillId);
-    if (new Set(task.dependsOn).size !== task.dependsOn.length) throw new Error(\`Task "\${task.id}" contains duplicate dependencies.\`);
+    if (new Set(task.dependsOn).size !== task.dependsOn.length) throw new Error(`Task "${task.id}" contains duplicate dependencies.`);
     for (const dependency of task.dependsOn) {
-      if (dependency === task.id) throw new Error(\`Task "\${task.id}" cannot depend on itself.\`);
-      if (!taskById.has(dependency)) throw new Error(\`Task "\${task.id}" depends on unknown task "\${dependency}".\`);
+      if (dependency === task.id) throw new Error(`Task "${task.id}" cannot depend on itself.`);
+      if (!taskById.has(dependency)) throw new Error(`Task "${task.id}" depends on unknown task "${dependency}".`);
     }
   }
 
@@ -25,7 +25,7 @@ export function planWorkflow(definition: WorkflowDefinition, registry: SkillRegi
     const ready = [...remaining.values()]
       .filter(({task}) => task.dependsOn.every((dependency) => completed.has(dependency)))
       .sort((a, b) => a.index - b.index);
-    if (ready.length === 0) throw new Error(\`Workflow contains a dependency cycle involving: \${[...remaining.keys()].join(", ")}.\`);
+    if (ready.length === 0) throw new Error(`Workflow contains a dependency cycle involving: ${[...remaining.keys()].join(", ")}.`);
     for (const item of ready) {
       remaining.delete(item.task.id);
       completed.add(item.task.id);

@@ -17,14 +17,14 @@ export async function executeWorkflow(
     const skill = registry.get(skillId);
     const input = skill.inputSchema.safeParse(task.input);
     if (!input.success) {
-      results.push({taskId: task.id, skillId, status: "failed", error: \`Input validation failed: \${input.error.message}\`});
+      results.push({taskId: task.id, skillId, status: "failed", error: `Input validation failed: ${input.error.message}`});
       break;
     }
     const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
     try {
       const rawOutput = await skill.execute(input.data, {workflowId: definition.id, taskId: task.id, dependencies});
       const output = skill.outputSchema.safeParse(rawOutput);
-      if (!output.success) throw new Error(\`Output validation failed: \${output.error.message}\`);
+      if (!output.success) throw new Error(`Output validation failed: ${output.error.message}`);
       outputs[task.id] = output.data;
       results.push({taskId: task.id, skillId, status: "completed", output: output.data});
     } catch (error) {

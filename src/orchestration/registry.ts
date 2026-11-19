@@ -14,11 +14,11 @@ export class SkillRegistry {
   ): this {
     const id = SkillIdSchema.parse(definition.id);
     SkillVersionSchema.parse(definition.version);
-    if (this.skills.has(id)) throw new Error(\`Skill "\${id}" is already registered.\`);
+    if (this.skills.has(id)) throw new Error(`Skill "${id}" is already registered.`);
 
     const capabilities = (definition.capabilities ?? []).map((capability) => SkillCapabilitySchema.parse(capability));
     if (new Set(capabilities).size !== capabilities.length) {
-      throw new Error(\`Skill "\${id}" declares a capability more than once.\`);
+      throw new Error(`Skill "${id}" declares a capability more than once.`);
     }
 
     this.skills.set(id, {...definition, capabilities});
@@ -32,7 +32,7 @@ export class SkillRegistry {
 
   get(id: string): SkillDefinition<any, any> {
     const definition = this.skills.get(id);
-    if (!definition) throw new Error(\`Skill "\${id}" is not registered.\`);
+    if (!definition) throw new Error(`Skill "${id}" is not registered.`);
     return definition;
   }
 
@@ -53,13 +53,13 @@ export class SkillRegistry {
     const providers = this.listProviders(capability);
     if (preferredProvider) {
       if (!providers.includes(preferredProvider)) {
-        throw new Error(\`Skill "\${preferredProvider}" does not provide capability "\${capability}".\`);
+        throw new Error(`Skill "${preferredProvider}" does not provide capability "${capability}".`);
       }
       return preferredProvider;
     }
-    if (providers.length === 0) throw new Error(\`No registered skill provides capability "\${capability}".\`);
+    if (providers.length === 0) throw new Error(`No registered skill provides capability "${capability}".`);
     if (providers.length > 1) {
-      throw new Error(\`Capability "\${capability}" is ambiguous; choose a provider: \${providers.join(", ")}.\`);
+      throw new Error(`Capability "${capability}" is ambiguous; choose a provider: ${providers.join(", ")}.`);
     }
     return providers[0]!;
   }

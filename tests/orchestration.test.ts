@@ -12,9 +12,9 @@ import {
 } from "../src/orchestration";
 
 const makeRegistry = () => new SkillRegistry()
-  .register({id:"creative.brief",version:"1.0.0",capabilities:["creative.brief"],inputSchema:z.object({topic:z.string()}),outputSchema:z.object({summary:z.string()}),execute:({topic})=>({summary:\`Brief: \${topic}\`})})
+  .register({id:"creative.brief",version:"1.0.0",capabilities:["creative.brief"],inputSchema:z.object({topic:z.string()}),outputSchema:z.object({summary:z.string()}),execute:({topic})=>({summary:`Brief: ${topic}`})})
   .register({id:"visual.storyboard",version:"1.0.0",capabilities:["visual.storyboard"],inputSchema:z.object({style:z.string()}),outputSchema:z.object({frames:z.number()}),execute:(_input,ctx)=>({frames:(ctx.dependencies.brief as {summary:string}).summary.length})})
-  .register({id:"production.render",version:"1.0.0",capabilities:["video.render"],inputSchema:z.object({format:z.string()}),outputSchema:z.object({asset:z.string()}),execute:({format})=>({asset:\`render.\${format}\`})});
+  .register({id:"production.render",version:"1.0.0",capabilities:["video.render"],inputSchema:z.object({format:z.string()}),outputSchema:z.object({asset:z.string()}),execute:({format})=>({asset:`render.${format}`})});
 
 const workflow: WorkflowDefinition = {id:"demo",tasks:[
   {id:"render",skill:"production.render",input:{format:"mp4"},dependsOn:["storyboard"]},

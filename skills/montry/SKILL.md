@@ -10,7 +10,7 @@ description: Open-source skills orchestration system with capability discovery, 
 Coordinate specialist skills through versioned contracts. Renderers, models and external providers are capabilities used by skills; they are not the orchestration layer.
 
 ## Skill discovery and provider selection
-1. Read local \`skill.json\` manifests under the configured skills root.
+1. Read local `skill.json` manifests under the configured skills root.
 2. Validate each manifest and its directory identity.
 3. Index the capabilities provided by each skill.
 4. Confirm every required capability has at least one provider.
