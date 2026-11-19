@@ -7,6 +7,7 @@ import {
   executeWorkflow,
   loadSkillCatalog,
   planWorkflow,
+  previewWorkflow,
   SkillRegistry,
   type WorkflowDefinition,
 } from "../src/orchestration";
@@ -42,6 +43,27 @@ describe("skill registry",()=>{
 
 describe("workflow planner",()=>{
   it("builds a stable topological order",()=>expect(planWorkflow(workflow,makeRegistry()).map(({task})=>task.id)).toEqual(["brief","storyboard","render"]));
+  it("previews deterministic dependency layers and provider metadata without executing skills", () => {
+    const executeBrief = vi.fn(({topic}: {topic:string}) => ({summary:`Brief: ${topic}`}));
+    const skills = new SkillRegistry()
+      .register({id:"brief",version:"1.2.0",capabilities:["creative.brief"],inputSchema:z.object({topic:z.string()}),outputSchema:z.object({summary:z.string()}),execute:executeBrief})
+      .register({id:"story",version:"2.0.0",capabilities:["visual.storyboard"],requires:["creative.brief"],inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true})})
+      .register({id:"audio.a",version:"1.0.0",capabilities:["audio.search"],inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true})})
+      .register({id:"audio.b",version:"1.0.0",capabilities:["audio.search"],inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true})});
+    const preview = previewWorkflow({id:"preview-only",tasks:[
+      {id:"story",skill:"story",input:{},dependsOn:["brief"]},
+      {id:"audio",capability:"audio.search",provider:"audio.b",input:{},dependsOn:[]},
+      {id:"brief",skill:"brief",input:{topic:"orchestra"},dependsOn:[]},
+    ]}, skills);
+    expect(preview).toMatchObject({
+      workflowId:"preview-only",taskCount:3,layerCount:2,
+      layers:[["audio","brief"],["story"]],
+    });
+    expect(preview.tasks[0]).toMatchObject({taskId:"audio",skillId:"audio.b",requestedCapability:"audio.search",provider:"audio.b",layer:0});
+    expect(preview.tasks[1]).toMatchObject({taskId:"brief",skillId:"brief",version:"1.2.0",layer:0});
+    expect(preview.tasks[2]?.requirements).toEqual([{capability:"creative.brief",providers:["brief"]}]);
+    expect(executeBrief).not.toHaveBeenCalled();
+  });
   it("resolves tasks by capability and a selected provider",()=>{
     const skills=makeRegistry();
     const result=planWorkflow({id:"capability-flow",tasks:[
