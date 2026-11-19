@@ -16,9 +16,10 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 - Workflow tasks may target a stable skill ID or a capability.
 - Stable topological planning with cycle, reference and duplicate validation.
 - Dependency-scoped outputs, runtime schema validation and fail-fast execution.
+- Bounded parallel execution, cooperative cancellation, per-task timeouts and structured lifecycle events.
 - Safe metadata discovery: no dynamic imports, shell execution, package installation or network access.
 
-See [docs/skills-orchestration.md](docs/skills-orchestration.md) and [docs/skill-catalog.md](docs/skill-catalog.md).
+See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md) and [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md).
 
 ## Current video capability
 
@@ -117,7 +118,7 @@ See [docs/audio-provider-adapters.md](docs/audio-provider-adapters.md). The core
 
 ## Current runtime boundary
 
-The in-process runtime is the first orchestration increment. It does not yet claim persistence, retries, parallel scheduling, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot must remain optional adapters behind explicit skill contracts.
+The in-process runtime supports bounded parallel scheduling, cooperative cancellation, per-task timeouts and structured lifecycle events. It does not yet claim persistence, retries, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot must remain optional adapters behind explicit skill contracts.
 
 ## Quality gates
 
