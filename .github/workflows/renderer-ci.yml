@@ -4,6 +4,9 @@ on:
     branches: [main, "feat/**"]
   pull_request:
     branches: [main]
+concurrency:
+  group: renderer-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
 jobs:
   validate-and-render:
     runs-on: ubuntu-latest
