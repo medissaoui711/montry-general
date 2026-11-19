@@ -270,7 +270,7 @@ describe("workflow runtime",()=>{
     let calls = 0;
     const skills = new SkillRegistry().register({
       id:"retry.bad-output",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
-      execute:() => { calls += 1; return {wrong:true}; },
+      execute:() => { calls += 1; return {wrong:true} as unknown as {ok:boolean}; },
     });
     const result = await executeWorkflow({id:"bad-output-retry",tasks:[
       {id:"task",skill:"retry.bad-output",input:{},dependsOn:[]},
