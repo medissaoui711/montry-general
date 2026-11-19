@@ -16,6 +16,24 @@ function emit(options: WorkflowExecutionOptions, event: WorkflowExecutionEvent):
   try { options.onEvent?.(event); } catch { /* Observers must not affect execution. */ }
 }
 
+async function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw new Error(abortReason(signal));
+  if (delayMs === 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new Error(abortReason(signal!)));
+    };
+    signal?.addEventListener("abort", onAbort, {once:true});
+    if (signal?.aborted) onAbort();
+  });
+}
+
 async function executeWithControls(
   execute: (signal: AbortSignal) => unknown | Promise<unknown>,
   parentSignal: AbortSignal | undefined,
@@ -74,6 +92,22 @@ export async function executeWorkflow(
   if (taskTimeoutMs !== undefined && (!Number.isInteger(taskTimeoutMs) || taskTimeoutMs < 1 || taskTimeoutMs > 600_000)) {
     throw new Error("taskTimeoutMs must be an integer between 1 and 600000.");
   }
+  const maxAttempts = options.maxAttempts ?? 1;
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
+    throw new Error("maxAttempts must be an integer between 1 and 10.");
+  }
+  const initialRetryDelayMs = options.initialRetryDelayMs ?? 100;
+  if (!Number.isInteger(initialRetryDelayMs) || initialRetryDelayMs < 0 || initialRetryDelayMs > 60_000) {
+    throw new Error("initialRetryDelayMs must be an integer between 0 and 60000.");
+  }
+  const retryBackoffMultiplier = options.retryBackoffMultiplier ?? 2;
+  if (!Number.isFinite(retryBackoffMultiplier) || retryBackoffMultiplier < 1 || retryBackoffMultiplier > 10) {
+    throw new Error("retryBackoffMultiplier must be between 1 and 10.");
+  }
+  const maxRetryDelayMs = options.maxRetryDelayMs ?? 5_000;
+  if (!Number.isInteger(maxRetryDelayMs) || maxRetryDelayMs < 0 || maxRetryDelayMs > 60_000) {
+    throw new Error("maxRetryDelayMs must be an integer between 0 and 60000.");
+  }
 
   const preview = previewWorkflow(definition, registry);
   const taskById = new Map(definition.tasks.map((task) => [task.id, task]));
@@ -95,26 +129,44 @@ export async function executeWorkflow(
         const input = skill.inputSchema.safeParse(task.input);
         if (!input.success) {
           const error = `Input validation failed: ${input.error.message}`;
-          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),error});
+          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt:1,error});
           return {taskId,skillId:planned.skillId,status:"failed",error};
         }
         const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
         const startedAt = Date.now();
-        const deadlineAt = taskTimeoutMs === undefined ? undefined : startedAt + taskTimeoutMs;
-        emit(options, {type:"task.started",workflowId:definition.id,taskId,skillId:planned.skillId,at:startedAt,...(deadlineAt === undefined ? {} : {deadlineAt})});
+        const firstDeadlineAt = taskTimeoutMs === undefined ? undefined : startedAt + taskTimeoutMs;
+        let attempt = 1;
+        emit(options, {type:"task.started",workflowId:definition.id,taskId,skillId:planned.skillId,at:startedAt,attempt,...(firstDeadlineAt === undefined ? {} : {deadlineAt:firstDeadlineAt})});
         try {
-          const rawOutput = await executeWithControls(
-            (signal) => skill.execute(input.data, {
-              workflowId:definition.id,taskId,dependencies,signal,
-              ...(deadlineAt === undefined ? {} : {deadlineAt}),
-            }),
-            options.signal,
-            taskTimeoutMs,
-          );
+          let rawOutput: unknown;
+          while (true) {
+            const attemptStartedAt = Date.now();
+            const deadlineAt = taskTimeoutMs === undefined ? undefined : attemptStartedAt + taskTimeoutMs;
+            try {
+              rawOutput = await executeWithControls(
+                (signal) => skill.execute(input.data, {
+                  workflowId:definition.id,taskId,dependencies,signal,
+                  ...(deadlineAt === undefined ? {} : {deadlineAt}),
+                }),
+                options.signal,
+                taskTimeoutMs,
+              );
+              break;
+            } catch (error) {
+              const message = messageOf(error);
+              const timedOut = message.startsWith("Task timed out after ");
+              const canRetry = skill.retrySafe === true && attempt < maxAttempts && !timedOut && !options.signal?.aborted;
+              if (!canRetry) throw error;
+              const delayMs = Math.min(maxRetryDelayMs, Math.round(initialRetryDelayMs * retryBackoffMultiplier ** (attempt - 1)));
+              emit(options, {type:"task.retrying",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,nextAttempt:attempt + 1,delayMs,error:message});
+              await waitForRetry(delayMs, options.signal);
+              attempt += 1;
+            }
+          }
           const output = skill.outputSchema.safeParse(rawOutput);
           if (!output.success) throw new Error(`Output validation failed: ${output.error.message}`);
           outputs[taskId] = output.data;
-          emit(options, {type:"task.completed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now()});
+          emit(options, {type:"task.completed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt});
           return {taskId,skillId:planned.skillId,status:"completed",output:output.data};
         } catch (error) {
           const message = messageOf(error);
@@ -122,7 +174,7 @@ export async function executeWorkflow(
             emit(options, {type:"task.cancelled",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),reason:message});
             return {taskId,skillId:planned.skillId,status:"cancelled",reason:message};
           }
-          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),error:message});
+          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,error:message});
           return {taskId,skillId:planned.skillId,status:"failed",error:message};
         }
       }));
