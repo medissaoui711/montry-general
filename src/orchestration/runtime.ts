@@ -129,7 +129,7 @@ export async function executeWorkflow(
         const input = skill.inputSchema.safeParse(task.input);
         if (!input.success) {
           const error = `Input validation failed: ${input.error.message}`;
-          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),error});
+          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt:1,error});
           return {taskId,skillId:planned.skillId,status:"failed",error};
         }
         const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
