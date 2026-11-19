@@ -119,7 +119,7 @@ Validation rules:
 
 ## Render an MP4
 
-Using the repository's default brand configuration:
+After configuring `skills/template-reels/brand.json` and replacing its placeholder SVG logo:
 
 ```bash
 npm run render -- ./reel-input.json ./out/reel.mp4
