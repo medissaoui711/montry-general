@@ -83,6 +83,13 @@ export class SkillRegistry {
       .sort((a, b) => a.skillId.localeCompare(b.skillId));
   }
 
+  assertProviderAvailable(skillId: string): void {
+    const health = this.getProviderHealth(skillId);
+    if (health.status === "unavailable") {
+      throw new Error(`Skill "${skillId}" is unavailable${health.reason ? `: ${health.reason}` : "."}`);
+    }
+  }
+
   listProviders(capability: string): string[] {
     const normalized = SkillCapabilitySchema.parse(capability);
     return [...(this.capabilityProviders.get(normalized) ?? [])].sort();
@@ -96,10 +103,7 @@ export class SkillRegistry {
       if (!providers.includes(preferredProvider)) {
         throw new Error(`Skill "${preferredProvider}" does not provide capability "${capability}".`);
       }
-      const health = this.getProviderHealth(preferredProvider);
-      if (health.status === "unavailable") {
-        throw new Error(`Skill "${preferredProvider}" is unavailable for capability "${capability}"${health.reason ? `: ${health.reason}` : "."}`);
-      }
+      this.assertProviderAvailable(preferredProvider);
       return preferredProvider;
     }
 
