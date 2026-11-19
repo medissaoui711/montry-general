@@ -51,7 +51,7 @@ describe("Openverse provider",()=>{
   it("surfaces rate-limit retry metadata and rejects malformed queries",async()=>{
     const fetchImpl=vi.fn(async()=>new Response("{}",{status:429,headers:{"retry-after":"2"}})) as unknown as typeof fetch;
     const provider=new OpenverseProvider({fetchImpl});
-    await expect(provider.searchAudio("whoosh")).rejects.toMatchObject<Partial<OpenverseHttpError>>({status:429,retryAfter:"2"});
+    await expect(provider.searchAudio("whoosh")).rejects.toMatchObject({status:429,retryAfter:"2"});
     await expect(provider.searchAudio("   ")).rejects.toThrow();
   });
 });

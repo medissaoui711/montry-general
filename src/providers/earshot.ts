@@ -81,7 +81,7 @@ function toCommandResult(result:EarshotProcessResult):EarshotCommandResult {
 /** Shell-free bridge exposing only the supported SFX command allowlist. */
 export class EarshotAdapter {
   private readonly executable:string;
-  private readonly cwd?:string;
+  private readonly cwd:string|undefined;
   private readonly timeoutMs:number;
   private readonly maxOutputBytes:number;
   private readonly env:Record<string,string>;
@@ -97,20 +97,22 @@ export class EarshotAdapter {
     if(this.maxOutputBytes<1024||this.maxOutputBytes>10_000_000)throw new Error("Earshot output limit must be between 1KB and 10MB.");
   }
   private async run(args:string[]):Promise<EarshotCommandResult> {
-    const result=await this.runner(this.executable,args,{
-      cwd:this.cwd,timeoutMs:this.timeoutMs,maxOutputBytes:this.maxOutputBytes,env:this.env,
-    });
+    const runnerOptions:EarshotRunnerOptions={
+      timeoutMs:this.timeoutMs,maxOutputBytes:this.maxOutputBytes,env:this.env,
+      ...(this.cwd===undefined?{}:{cwd:this.cwd}),
+    };
+    const result=await this.runner(this.executable,args,runnerOptions);
     if(result.exitCode!==0)throw new Error("Earshot command failed (exit "+result.exitCode+"): "+result.stderr.slice(-2000));
     return toCommandResult(result);
   }
-  async listSfx(options:{kind?:string;category?:string}={}):Promise<EarshotCommandResult> {
+  async listSfx(options:{kind?:string|undefined;category?:string|undefined}={}):Promise<EarshotCommandResult> {
     const args=["sfx","list"];
     if(options.kind)args.push("--kind",safeToken(options.kind,"kind"));
     if(options.category)args.push("--category",safeToken(options.category,"category"));
     args.push("--json");
     return this.run(args);
   }
-  async renderSfx(options:{id:string;outputPath:string;duration?:number;apex?:number;pitch?:string;seed?:number;overwrite?:boolean}):Promise<EarshotCommandResult> {
+  async renderSfx(options:{id:string;outputPath:string;duration?:number|undefined;apex?:number|undefined;pitch?:string|undefined;seed?:number|undefined;overwrite?:boolean|undefined}):Promise<EarshotCommandResult> {
     const id=safeSoundId(options.id);
     const outputPath=absoluteFile(options.outputPath,"Output path");
     if(path.extname(outputPath).toLowerCase()!==".wav")throw new Error("Earshot output path must use the .wav extension.");
@@ -142,7 +144,7 @@ export class EarshotAdapter {
     if(!rendered.isFile()||rendered.size===0)throw new Error("Earshot did not produce a non-empty WAV file.");
     return result;
   }
-  async checkSfx(options:{filePath:string;category?:string;role?:string}):Promise<EarshotCommandResult> {
+  async checkSfx(options:{filePath:string;category?:string|undefined;role?:string|undefined}):Promise<EarshotCommandResult> {
     const filePath=absoluteFile(options.filePath,"Audio file path");
     const fileStat=await stat(filePath);
     if(!fileStat.isFile())throw new Error("Earshot check input must be a regular file.");
