@@ -6,7 +6,8 @@ import {z} from "zod";
 import {
   executeWorkflow,
   loadSkillCatalog,
-  planWorkflow,\n  previewWorkflow,
+  planWorkflow,
+  previewWorkflow,
   SkillRegistry,
   type WorkflowDefinition,
 } from "../src/orchestration";
