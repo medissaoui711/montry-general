@@ -20,7 +20,7 @@ const catalog = (entry = manifest()): SkillCatalog => ({
 const definitions = () => [
   {id: "audio.search", version: "1.0.0", capabilities: ["audio.search"], inputSchema: z.object({}), outputSchema: z.object({ok: z.boolean()}), execute: () => ({ok: true})},
   {id: "audio.generate", version: "1.0.0", capabilities: ["audio.generate"], inputSchema: z.object({}), outputSchema: z.object({ok: z.boolean()}), execute: () => ({ok: true})},
-] as const;
+];
 
 describe("trusted manifest-to-runtime bindings", () => {
   it("registers trusted implementations only when the manifest contract matches", () => {
