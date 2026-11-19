@@ -134,8 +134,9 @@ export async function executeWorkflow(
         }
         const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
         const startedAt = Date.now();
+        const firstDeadlineAt = taskTimeoutMs === undefined ? undefined : startedAt + taskTimeoutMs;
         let attempt = 1;
-        emit(options, {type:"task.started",workflowId:definition.id,taskId,skillId:planned.skillId,at:startedAt,attempt});
+        emit(options, {type:"task.started",workflowId:definition.id,taskId,skillId:planned.skillId,at:startedAt,attempt,...(firstDeadlineAt === undefined ? {} : {deadlineAt:firstDeadlineAt})});
         try {
           let rawOutput: unknown;
           while (true) {
