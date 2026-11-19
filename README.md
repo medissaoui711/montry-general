@@ -12,7 +12,7 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 
 - Versioned skill implementations with Zod input/output contracts.
 - Local `skill.json` manifests for discovery and capability indexing.
-- Capability-based provider selection; ambiguous providers require explicit selection.
+- Health-aware capability resolution with healthy/degraded/unavailable provider states.
 - Workflow tasks may target a stable skill ID or a capability.
 - Stable topological planning with cycle, reference and duplicate validation.
 - Dependency-scoped outputs, runtime schema validation and fail-fast execution.
@@ -39,24 +39,20 @@ Workflow Definition
 Skill Registry <---- Skill Manifest Catalog
        |                       |
        v                       v
-Capability Resolver ---- Provider Selection
-       |
-       v
-Dependency Planner
-       |
-       v
-Orchestration Runtime
-       |
- +-----+----------+-----------+
- |                |           |
-Creative        Audio      Production
-Skills          Skills      Skills
- |                |           |
- +----------------+-----------+
+Provider Health ------ Capability Resolver
+       |                       |
+       +----------+------------+
+                  v
+           Dependency Planner
+                  |
+                  v
+          Orchestration Runtime
+                  |
+          Specialist Skills
                   |
           Validated Outputs
                   |
-            Render / QC
+              Render / QC
 ```
 
 ## Repository layout
@@ -108,7 +104,6 @@ npm run render -- ./examples/reel-input.example.json ./out/demo.mp4 --brand ./ex
 
 The renderer rejects missing logos, sample identity placeholders, invalid dimensions, scripts, event handlers and external network references inside SVG files.
 
-
 ## Optional audio providers
 
 - **Openverse** searches openly licensed sound-effect candidates and preserves creator, license, attribution, source-page and duration metadata. Search never downloads or approves an asset.
@@ -118,7 +113,7 @@ See [docs/audio-provider-adapters.md](docs/audio-provider-adapters.md). The core
 
 ## Current runtime boundary
 
-The in-process runtime supports bounded parallel scheduling, cooperative cancellation, per-attempt timeouts, explicit idempotency-gated retries and structured lifecycle events. It does not yet claim persistence, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot must remain optional adapters behind explicit skill contracts.
+The in-process runtime supports health-aware provider resolution, bounded parallel scheduling, cooperative cancellation, per-attempt timeouts, explicit idempotency-gated retries and structured lifecycle events. It does not yet claim persistence, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot remain optional adapters behind explicit skill contracts.
 
 ## Quality gates
 

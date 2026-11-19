@@ -10,6 +10,7 @@ export function planWorkflow(definition: WorkflowDefinition, registry: SkillRegi
   for (const task of workflow.tasks) {
     const skillId = task.skill ?? registry.resolveCapability(task.capability!, task.provider);
     if (!registry.has(skillId)) throw new Error(`Task "${task.id}" references unregistered skill "${skillId}".`);
+    registry.assertProviderAvailable(skillId);
     resolvedSkills.set(task.id, skillId);
     if (new Set(task.dependsOn).size !== task.dependsOn.length) throw new Error(`Task "${task.id}" contains duplicate dependencies.`);
     for (const dependency of task.dependsOn) {
