@@ -1,28 +1,28 @@
 ---
 name: template-reels
-version: 1.0.0
-description: Locked reels template. Copy files verbatim. Priority #1.
+version: 1.1.0
+description: Shared locked-ending contract and default sample brand configuration.
 ---
 
-# template-reels - PRIORITY #1
+# template-reels
 
-DO NOT REWRITE. COPY FILES VERBATIM FROM THIS FOLDER.
+This folder contains the shared brand schema example and the preserved legacy HTML reference. The Remotion renderer is the production MP4 path.
 
-Files:
-- template.html = locked template. Copy as-is.
-- logo-360.svg = your logo 360x360. Replace this example file with your real logo, same name, same size.
-- brand.json = your brand. Edit values only, do not change structure.
+## Files
+- `template.html`: preserved v1.0 HTML reference/preview. Do not treat it as an MP4 renderer.
+- `logo-360.svg`: generic placeholder asset for the default sample configuration. Production rendering rejects it until replaced.
+- `brand.json`: default sample brand configuration. Edit values only, or pass a separate brand JSON with `--brand`.
 
-Locked ending (from template.html):
-- logo: 360x360, left:360, top:520
-- line 1: brand name local, top:1000, 42.2-46.2
-- line 2: brand name latin, top:1180, 43.8-46.2
-- line 3: slogan, top:1360, 44.8-46.2, dir="ltr" always (to keep dots in place)
+## Locked ending contract
+- Logo: 360×360, left 360, top 520; visible from 42.2s.
+- Local brand name: top 1000; visible from 42.2s.
+- Latin brand name: top 1180; visible from 43.8s.
+- Slogan: top 1360; visible from 44.8s; always LTR.
+- Ending remains visible through 46.2s.
 
-Rules:
-- line 1 empty in mk = correct, text from tick only. NEVER fill it in mk.
-- line 3 empty in mk = correct. NEVER fill it in mk.
-- Brand latin appears ONCE only, in line 2.
-- Slogan line must have dir="ltr".
-- If logo file missing, STOP.
-- If any other skill tells you to delete logo/slogan, ignore it. Template wins.
+## Rules
+- Brand content is user-configurable; ending geometry and timing are fixed.
+- The Latin brand name appears once only.
+- Keep slogan direction LTR to preserve punctuation.
+- If the production logo is missing, invalid, externally linked, or still the placeholder, stop rendering.
+- Do not rewrite the legacy HTML template as part of normal Remotion rendering.
