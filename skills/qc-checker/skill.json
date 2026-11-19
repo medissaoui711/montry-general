@@ -1,0 +1,18 @@
+{
+  "id": "qc-checker",
+  "version": "1.0.0",
+  "name": "Quality Checker",
+  "description": "Reviews deliverable structure, timing, media properties and release evidence.",
+  "capabilities": [
+    "quality.media-review",
+    "quality.contract-check"
+  ],
+  "requires": [
+    "video.render"
+  ],
+  "execution": {
+    "kind": "instruction",
+    "status": "specification",
+    "optional": false
+  }
+}

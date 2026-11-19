@@ -1,0 +1,16 @@
+{
+  "id": "motion-builder",
+  "version": "1.0.0",
+  "name": "Motion Builder",
+  "description": "Plans visual motion, transitions and frame-accurate scene composition.",
+  "capabilities": [
+    "visual.timeline",
+    "motion.composition"
+  ],
+  "requires": [],
+  "execution": {
+    "kind": "instruction",
+    "status": "specification",
+    "optional": false
+  }
+}
