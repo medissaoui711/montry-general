@@ -1,56 +1,19 @@
-# Skill catalog and capability discovery
+# Skill catalog and trusted runtime bindings
 
-Montry distinguishes discovering a skill from executing a skill.
+Skill manifests are metadata, not executable packages. A `skill.json` may describe an ID, version, capabilities, requirements, execution kind and whether a provider is optional. It must never contain a module path, dynamic import target, shell command or executable code that the runtime evaluates.
 
-## Manifest format
+## Discovery and execution are separate
 
-Each skill directory may contain a `skill.json` manifest with:
-- `id`: stable identifier matching the directory name.
-- `version`: semantic version.
-- `name` and `description`: human-readable metadata.
-- `capabilities`: capabilities offered by the skill.
-- `requires`: capabilities needed by the skill.
-- `execution.kind`: `instruction`, `in-process`, `cli` or `mcp`.
-- `execution.status`: `specification` or `implemented`.
-- `execution.optional`: whether the provider is optional.
+1. `loadSkillCatalog` validates manifests and builds a metadata catalog.
+2. Application code explicitly constructs trusted skill implementations using reviewed factories.
+3. `SkillImplementationRegistry` binds those implementations to a manifest.
+4. Binding succeeds only when the manifest is implemented and its version, complete capability set, requirements and execution kind match the trusted implementations.
+5. Only then are definitions registered with the workflow runtime.
 
-## Discovery
+A manifest discovered from disk cannot execute itself. Unknown manifests, specification-only entries, mismatched contracts and duplicate bindings are rejected. No dynamic import or arbitrary command execution is derived from manifest content.
 
-```ts
-import {loadSkillCatalog} from "./src/orchestration";
+## Optional providers
 
-const catalog = await loadSkillCatalog("./skills");
-const renderProviders = catalog.providers["video.render"] ?? [];
-console.log(renderProviders);
-```
+Optional providers should be probed by their adapter and registered only when available. A missing optional provider remains absent from the runtime; it does not invalidate the core catalog or other providers. The core must not install external tools or dependencies automatically.
 
-The loader reads only direct child directories and regular manifest files under the configured skills root. It does not follow symlinks, execute code, import entrypoints, install packages or access the network.
-
-Discovery validates manifest shape, ID/directory identity, duplicate IDs and required capability availability. Multiple providers may advertise the same capability.
-
-## Capability resolution
-
-Executable skill implementations register their capabilities with `SkillRegistry`. A workflow task can reference either a stable skill ID or a capability:
-
-```ts
-{
-  id: "render",
-  capability: "video.render",
-  input: { format: "mp4" },
-  dependsOn: []
-}
-```
-
-If exactly one registered skill provides the capability, it is selected. If several skills provide it, the workflow must name a `provider` explicitly. The runtime never picks an ambiguous provider by arbitrary registration order.
-
-## Execution boundary
-
-A manifest is metadata, not proof that a skill is executable. `execution.status` makes this distinction explicit. The in-process `SkillRegistry` still requires a trusted implementation registered by application code. Markdown instructions, CLI labels and MCP declarations are never executed automatically.
-
-## Security
-
-- No shell execution or dynamic imports occur during discovery.
-- Symlinked skill directories are not traversed.
-- Manifest files must be regular files contained within their own skill directory.
-- Unknown required capabilities fail catalog loading.
-- External CLI/MCP adapters require separate argument validation, timeouts, bounded output and explicit trust configuration.
+The binding registry accepts an availability callback for this gate. The callback should perform a bounded, side-effect-free probe and return `false` for a missing optional executable.

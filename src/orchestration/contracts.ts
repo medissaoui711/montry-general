@@ -36,6 +36,7 @@ export type SkillDefinition<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.Z
   id: z.infer<typeof SkillIdSchema>;
   version: z.infer<typeof SkillVersionSchema>;
   capabilities?: string[];
+  requires?: string[];
   inputSchema: I;
   outputSchema: O;
   execute: (input: z.infer<I>, context: SkillExecutionContext) => z.infer<O> | Promise<z.infer<O>>;
