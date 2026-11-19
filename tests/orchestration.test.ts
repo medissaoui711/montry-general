@@ -60,12 +60,72 @@ describe("workflow runtime",()=>{
   });
   it("blocks invalid inputs and outputs",async()=>{
     const execute=vi.fn(()=>({wrong:true}));
-    const skills=new SkillRegistry().register({id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),outputSchema:z.object({value:z.string()}),execute});
+    const skills=new SkillRegistry().register({id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),outputSchema:z.object({value:z.string()}),execute: execute as never});
     const badInput=await executeWorkflow({id:"bad-input",tasks:[{id:"one",skill:"strict.skill",input:{value:4},dependsOn:[]}]},skills);
     expect(badInput.status).toBe("failed");
     expect(execute).not.toHaveBeenCalled();
     const badOutput=await executeWorkflow({id:"bad-output",tasks:[{id:"one",skill:"strict.skill",input:{value:"ok"},dependsOn:[]}]},skills);
     expect(badOutput.status).toBe("failed");
     expect(badOutput.tasks[0]?.status).toBe("failed");
+  });
+});
+
+import {mkdtemp, mkdir, writeFile, rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import path from "node:path";
+import {loadSkillCatalog} from "../src/orchestration/manifest";
+
+describe("skill manifest catalog",()=>{
+  it("discovers manifests, indexes capabilities and validates requirements",async()=>{
+    const root=await mkdtemp(path.join(tmpdir(),"montry-catalog-"));
+    try {
+      await mkdir(path.join(root,"creative.writer"));
+      await mkdir(path.join(root,"production.renderer"));
+      await writeFile(path.join(root,"creative.writer","skill.json"),JSON.stringify({
+        id:"creative.writer",version:"1.0.0",name:"Writer",description:"Creates a creative brief.",
+        capabilities:["creative.brief"],requires:[],
+        execution:{kind:"instruction",status:"specification",optional:false},
+      }));
+      await writeFile(path.join(root,"production.renderer","skill.json"),JSON.stringify({
+        id:"production.renderer",version:"1.2.0",name:"Renderer",description:"Renders validated scenes.",
+        capabilities:["video.render"],requires:["creative.brief"],
+        execution:{kind:"in-process",status:"implemented",optional:false},
+      }));
+      const catalog=await loadSkillCatalog(root);
+      expect(catalog.skills.map((skill)=>skill.id)).toEqual(["creative.writer","production.renderer"]);
+      expect(catalog.providers["creative.brief"]).toEqual(["creative.writer"]);
+      expect(catalog.byId["production.renderer"]?.requires).toEqual(["creative.brief"]);
+    } finally {
+      await rm(root,{recursive:true,force:true});
+    }
+  });
+
+  it("rejects unavailable capabilities and manifest/directory identity mismatches",async()=>{
+    const root=await mkdtemp(path.join(tmpdir(),"montry-catalog-"));
+    try {
+      await mkdir(path.join(root,"visual.editor"));
+      const manifest={id:"visual.editor",version:"1.0.0",name:"Editor",description:"Edits visuals.",
+        capabilities:["visual.edit"],requires:["missing.capability"],
+        execution:{kind:"instruction",status:"specification",optional:true}};
+      await writeFile(path.join(root,"visual.editor","skill.json"),JSON.stringify(manifest));
+      await expect(loadSkillCatalog(root)).rejects.toThrow(/unavailable capability/i);
+      await writeFile(path.join(root,"visual.editor","skill.json"),JSON.stringify({...manifest,id:"wrong.id",requires:[]}));
+      await expect(loadSkillCatalog(root)).rejects.toThrow(/must match directory/i);
+    } finally {
+      await rm(root,{recursive:true,force:true});
+    }
+  });
+
+  it("ignores directories without manifests and rejects malformed manifests",async()=>{
+    const root=await mkdtemp(path.join(tmpdir(),"montry-catalog-"));
+    try {
+      await mkdir(path.join(root,"unmanifested"));
+      expect((await loadSkillCatalog(root)).skills).toEqual([]);
+      await mkdir(path.join(root,"bad.skill"));
+      await writeFile(path.join(root,"bad.skill","skill.json"),"{not-json");
+      await expect(loadSkillCatalog(root)).rejects.toThrow(/unable to read skill manifest/i);
+    } finally {
+      await rm(root,{recursive:true,force:true});
+    }
   });
 });

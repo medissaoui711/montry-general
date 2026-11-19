@@ -1,0 +1,17 @@
+{
+  "id": "montry",
+  "version": "1.2.0",
+  "name": "Montry Orchestrator",
+  "description": "Coordinates specialist skills through explicit contracts and validated workflows.",
+  "capabilities": [
+    "workflow.orchestration",
+    "skill.registry",
+    "workflow.validation"
+  ],
+  "requires": [],
+  "execution": {
+    "kind": "in-process",
+    "status": "implemented",
+    "optional": false
+  }
+}

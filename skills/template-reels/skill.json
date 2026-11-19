@@ -1,0 +1,18 @@
+{
+  "id": "template-reels",
+  "version": "1.0.0",
+  "name": "Template Reels",
+  "description": "Defines structured reel inputs and production rendering through Remotion.",
+  "capabilities": [
+    "video.render",
+    "video.timeline"
+  ],
+  "requires": [
+    "visual.timeline"
+  ],
+  "execution": {
+    "kind": "in-process",
+    "status": "implemented",
+    "optional": false
+  }
+}
