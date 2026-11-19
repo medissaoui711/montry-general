@@ -56,7 +56,11 @@ const defaultRunner:EarshotProcessRunner=(executable,args,options)=>new Promise(
 });
 
 const safeToken=(value:string,label:string)=>{
-  if(!/^[a-z0-9][a-z0-9._/-]*$/i.test(value))throw new Error("Invalid Earshot "+label+".");
+  if(!/^[a-z0-9][a-z0-9._-]*$/i.test(value))throw new Error("Invalid Earshot "+label+".");
+  return value;
+};
+const safeSoundId=(value:string)=>{
+  if(!/^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*)?$/i.test(value))throw new Error("Invalid Earshot sound ID.");
   return value;
 };
 const absoluteFile=(value:string,label:string)=>{
@@ -106,15 +110,26 @@ export class EarshotAdapter {
     args.push("--json");
     return this.run(args);
   }
-  async renderSfx(options:{id:string;outputPath:string;duration?:number;apex?:number;pitch?:string;seed?:number}):Promise<EarshotCommandResult> {
-    const id=safeToken(options.id,"sound ID");
+  async renderSfx(options:{id:string;outputPath:string;duration?:number;apex?:number;pitch?:string;seed?:number;overwrite?:boolean}):Promise<EarshotCommandResult> {
+    const id=safeSoundId(options.id);
     const outputPath=absoluteFile(options.outputPath,"Output path");
     if(path.extname(outputPath).toLowerCase()!==".wav")throw new Error("Earshot output path must use the .wav extension.");
     const duration=optionalNumber(options.duration,"duration",0.01,60);
     const apex=optionalNumber(options.apex,"apex",0,60);
     if(duration!==undefined&&apex!==undefined&&Number(options.apex)>Number(duration))throw new Error("Earshot apex cannot exceed the requested duration.");
     if(options.seed!==undefined&&(!Number.isInteger(options.seed)||options.seed<0||options.seed>2_147_483_647))throw new Error("Earshot seed must be a non-negative 32-bit integer.");
-    if(options.pitch!==undefined&&!(/^[A-Ga-g](?:#|b)?[0-8]$/.test(options.pitch)||/^\d{1,5}(?:\.\d+)?$/.test(options.pitch)))throw new Error("Earshot pitch must be a note name or a positive frequency in Hz.");
+    if(options.pitch!==undefined) {
+      const note=/^[A-Ga-g](?:#|b)?[0-8]$/.test(options.pitch);
+      const frequency=/^\d{1,5}(?:\.\d+)?$/.test(options.pitch)?Number(options.pitch):0;
+      if(!note&&(!Number.isFinite(frequency)||frequency<=0||frequency>20000))throw new Error("Earshot pitch must be a note name or a frequency between 1 and 20000 Hz.");
+    }
+    try {
+      const existing=await stat(outputPath);
+      if(!existing.isFile())throw new Error("Earshot output path already exists and is not a file.");
+      if(!options.overwrite)throw new Error("Earshot output file already exists; set overwrite=true to replace it.");
+    } catch(error) {
+      if((error as NodeJS.ErrnoException).code!=="ENOENT")throw error;
+    }
     await mkdir(path.dirname(outputPath),{recursive:true});
     const args=["sfx","render",id,"-o",outputPath];
     if(duration!==undefined)args.push("--dur",duration);
@@ -122,7 +137,10 @@ export class EarshotAdapter {
     if(options.pitch!==undefined)args.push("--pitch",options.pitch);
     if(options.seed!==undefined)args.push("--seed",String(options.seed));
     args.push("--json");
-    return this.run(args);
+    const result=await this.run(args);
+    const rendered=await stat(outputPath);
+    if(!rendered.isFile()||rendered.size===0)throw new Error("Earshot did not produce a non-empty WAV file.");
+    return result;
   }
   async checkSfx(options:{filePath:string;category?:string;role?:string}):Promise<EarshotCommandResult> {
     const filePath=absoluteFile(options.filePath,"Audio file path");
