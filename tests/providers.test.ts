@@ -65,6 +65,11 @@ describe("Earshot optional CLI adapter",()=>{
 
     const missingAdapter = new EarshotAdapter({runner: async () => { throw new Error("ENOENT"); }});
     await expect(missingAdapter.isAvailable()).resolves.toBe(false);
+
+    const unsuccessfulAdapter = new EarshotAdapter({
+      runner: async () => ({stdout: "", stderr: "unsupported", exitCode: 1}),
+    });
+    await expect(unsuccessfulAdapter.isAvailable()).resolves.toBe(false);
   });
 
   it("uses a shell-free allowlisted argument vector and returns structured output",async()=>{
