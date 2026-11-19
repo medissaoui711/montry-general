@@ -146,6 +146,67 @@ describe("workflow runtime",()=>{
     expect(result.tasks.map((t)=>t.status)).toEqual(["failed","skipped"]);
     expect(second).not.toHaveBeenCalled();
   });
+  it("cancels an active task and does not schedule later tasks", async () => {
+    const controller = new AbortController();
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const second = vi.fn(() => ({ok:true}));
+    const skills = new SkillRegistry()
+      .register({
+        id:"waiting",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+        execute:(_input,context) => new Promise((_resolve,reject) => {
+          markStarted();
+          context.signal.addEventListener("abort", () => reject(new Error("provider stopped")), {once:true});
+        }),
+      })
+      .register({id:"later",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute:second});
+    const running = executeWorkflow({id:"cancel-flow",tasks:[
+      {id:"active",skill:"waiting",input:{},dependsOn:[]},
+      {id:"later",skill:"later",input:{},dependsOn:["active"]},
+    ]},skills,{signal:controller.signal});
+    await started;
+    controller.abort("operator requested cancellation");
+    const result = await running;
+    expect(result.status).toBe("cancelled");
+    expect(result.tasks.map((task) => task.status)).toEqual(["cancelled","cancelled"]);
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it("times out tasks, aborts their provider signal, and emits lifecycle events", async () => {
+    let observedAbort = false;
+    const events: string[] = [];
+    const skills = new SkillRegistry().register({
+      id:"slow",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),
+      execute:(_input,context) => new Promise((_resolve,reject) => {
+        context.signal.addEventListener("abort", () => {
+          observedAbort = context.signal.aborted;
+          reject(new Error("provider received abort"));
+        }, {once:true});
+      }),
+    });
+    const result = await executeWorkflow({id:"timeout-flow",tasks:[
+      {id:"slow-task",skill:"slow",input:{},dependsOn:[]},
+    ]},skills,{
+      taskTimeoutMs:10,
+      onEvent:(event) => { events.push(event.type); },
+    });
+    expect(result.status).toBe("failed");
+    expect(result.tasks[0]).toMatchObject({status:"failed",error:"Task timed out after 10ms."});
+    expect(observedAbort).toBe(true);
+    expect(events).toEqual(["task.started","task.failed"]);
+  });
+
+  it("isolates observer exceptions and validates timeout configuration", async () => {
+    const skills = makeRegistry();
+    const result = await executeWorkflow({id:"observer",tasks:[
+      {id:"brief",skill:"creative.brief",input:{topic:"safe"},dependsOn:[]},
+    ]},skills,{onEvent:() => { throw new Error("observer failure"); }});
+    expect(result.status).toBe("completed");
+    await expect(executeWorkflow({id:"bad-timeout",tasks:[
+      {id:"brief",skill:"creative.brief",input:{topic:"safe"},dependsOn:[]},
+    ]},skills,{taskTimeoutMs:0})).rejects.toThrow(/taskTimeoutMs/i);
+  });
+
   it("blocks invalid inputs and outputs",async()=>{
     const execute=vi.fn(()=>({wrong:true}));
     const skills=new SkillRegistry().register({id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),outputSchema:z.object({value:z.string()}),execute:execute as never});
