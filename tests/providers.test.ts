@@ -111,7 +111,10 @@ describe("Earshot optional CLI adapter",()=>{
     const runner=vi.fn(async(_exe:string,args:string[])=>({stdout:JSON.stringify({command:args.slice(0,2)}),stderr:"",exitCode:0}));
     const earshot=new EarshotAdapter({runner});
     const registry=new SkillRegistry();
-    for(const skill of createEarshotSfxSkills(earshot)) registry.register(skill);
+    const [listSkill,renderSkill,checkSkill]=createEarshotSfxSkills(earshot);
+    registry.register(listSkill);
+    registry.register(renderSkill);
+    registry.register(checkSkill);
     const fetchImpl=vi.fn(async()=>new Response(JSON.stringify(openversePayload),{status:200})) as unknown as typeof fetch;
     registry.register(createOpenverseSearchSkill(new OpenverseProvider({fetchImpl})));
 
