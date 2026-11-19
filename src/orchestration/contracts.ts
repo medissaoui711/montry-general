@@ -1,7 +1,7 @@
 import {z} from "zod";
 
 export const SkillIdSchema = z.string().trim().min(1).regex(/^[a-z0-9][a-z0-9._/-]*$/i);
-export const SkillVersionSchema = z.string().regex(/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/);
+export const SkillVersionSchema = z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
 
 export const WorkflowTaskSchema = z.object({
   id: z.string().trim().min(1),

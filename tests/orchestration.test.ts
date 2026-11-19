@@ -60,7 +60,10 @@ describe("workflow runtime",()=>{
   });
   it("blocks invalid inputs and outputs",async()=>{
     const execute=vi.fn(()=>({wrong:true}));
-    const skills=new SkillRegistry().register({id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),outputSchema:z.object({value:z.string()}),execute});
+    const skills=new SkillRegistry().register({
+      id:"strict.skill",version:"1.0.0",inputSchema:z.object({value:z.string()}),
+      outputSchema:z.object({value:z.string()}),execute:execute as never,
+    });
     const badInput=await executeWorkflow({id:"bad-input",tasks:[{id:"one",skill:"strict.skill",input:{value:4},dependsOn:[]}]},skills);
     expect(badInput.status).toBe("failed");
     expect(execute).not.toHaveBeenCalled();
