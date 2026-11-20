@@ -21,7 +21,7 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 - Durable local-disk checkpoint storage for single-process deployments; pluggable stores for transactional multi-worker backends.
 - Safe metadata discovery: no dynamic imports, shell execution, package installation or network access.
 
-See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md) and [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md), [docs/workflow-checkpoint-resume.md](docs/workflow-checkpoint-resume.md) and [docs/workflow-checkpoints.md](docs/workflow-checkpoints.md).
+See [skills orchestration](docs/skills-orchestration.md), [skill catalog](docs/skill-catalog.md), [bounded workflow execution](docs/bounded-workflow-execution.md), [workflow lifecycle controls](docs/workflow-lifecycle-controls.md), [workflow checkpoint recovery](docs/workflow-checkpoint-resume.md) and [checkpoint storage](docs/workflow-checkpoints.md).
 
 ## Current video capability
 
