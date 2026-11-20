@@ -1,3 +1,4 @@
+export * from "./checkpoint";
 export * from "./contracts";
 export * from "./implementation-registry";
 export * from "./manifest";
