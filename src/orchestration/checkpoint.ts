@@ -13,7 +13,7 @@ export const WorkflowCheckpointTaskSchema = z.object({
   error: z.string().optional(),
   updatedAt: z.number().int().nonnegative(),
 }).strict().superRefine((task, context) => {
-  if (task.status === "completed" && !("output" in task)) {
+  if (task.status === "completed" && task.output === undefined) {
     context.addIssue({code:z.ZodIssueCode.custom,path:["output"],message:"Completed checkpoint tasks must include output."});
   }
   if (task.status === "failed" && !task.error) {
@@ -52,14 +52,16 @@ export interface WorkflowRunStore {
 /** Deterministic SHA-256 over workflow identity, task order, inputs and dependencies. */
 export function fingerprintWorkflow(definition: WorkflowDefinition): string {
   const canonical = (value: unknown): string => {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+    if (typeof value === "number" && Number.isFinite(value)) return JSON.stringify(value);
     if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
     if (value !== null && typeof value === "object") {
+      const prototype = Object.getPrototypeOf(value);
+      if (prototype !== Object.prototype && prototype !== null) throw new Error("Workflow contains a non-plain object that cannot be fingerprinted.");
       const record = value as Record<string, unknown>;
       return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
     }
-    const encoded = JSON.stringify(value);
-    if (encoded === undefined) throw new Error("Workflow contains a value that cannot be fingerprinted.");
-    return encoded;
+    throw new Error("Workflow contains a non-JSON value that cannot be fingerprinted.");
   };
   return createHash("sha256").update(canonical(definition)).digest("hex");
 }
