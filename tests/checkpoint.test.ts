@@ -42,11 +42,11 @@ describe("workflow checkpoints",()=>{
     }
   });
 
-  it("does not allow run IDs to escape the checkpoint directory",async()=>{
+  it("hashes run IDs before using them as filesystem names",async()=>{
     const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoints-"));
     try {
       const store=new FileWorkflowRunStore(directory);
-      await expect(store.load("../outside")).rejects.toThrow();
+      expect(await store.load("../outside")).toBeNull();
     } finally {
       await rm(directory,{recursive:true,force:true});
     }
