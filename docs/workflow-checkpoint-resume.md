@@ -14,8 +14,8 @@ const result = await executeWorkflow(workflow, registry, {
 `InMemoryWorkflowRunStore` is process-local and intended for tests or ephemeral runs.
 `FileWorkflowRunStore` persists JSON checkpoints to local disk, uses restrictive file
 permissions, hashes run IDs into filenames, and replaces files through a same-directory
-atomic rename. It serializes writes within one store instance. Do not share its directory
-between multiple processes: use a database-backed adapter with transactions or
+atomic rename. It serializes writes across store instances in the same Node.js process.
+Do not share its directory between multiple processes: use a database-backed adapter with transactions or
 compare-and-swap for multi-worker deployments.
 
 ## Persistence guarantees
