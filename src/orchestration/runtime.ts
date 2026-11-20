@@ -120,6 +120,9 @@ export async function executeWorkflow(
   if (Boolean(options.runId) !== Boolean(options.checkpointStore)) {
     throw new Error("runId and checkpointStore must be provided together.");
   }
+  if (options.runId !== undefined && (!options.runId.trim() || options.runId !== options.runId.trim())) {
+    throw new Error("runId must be non-empty and must not contain surrounding whitespace.");
+  }
   if (options.resume && !options.checkpointStore) {
     throw new Error("resume requires runId and checkpointStore.");
   }
