@@ -86,14 +86,14 @@ export class InMemoryWorkflowRunStore implements WorkflowRunStore {
 }
 
 
+const fileStoreWriteQueues = new Map<string, Promise<void>>();
+
 /**
  * Durable local-disk adapter. Writes use a same-directory temporary file and atomic
  * rename. It serializes writes within this instance; do not share a directory between
  * multiple processes without an external lock/CAS coordinator.
  */
 export class FileWorkflowRunStore implements WorkflowRunStore {
-  private readonly writeQueues = new Map<string, Promise<void>>();
-
   constructor(private readonly directory: string) {
     if (!directory.trim()) throw new Error("Checkpoint directory must not be empty.");
   }
@@ -119,7 +119,8 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
 
   async save(value: WorkflowCheckpoint): Promise<void> {
     const checkpoint = WorkflowCheckpointSchema.parse(value);
-    const previous = this.writeQueues.get(checkpoint.runId) ?? Promise.resolve();
+    const queueKey = `${path.resolve(this.directory)}\\0${checkpoint.runId}`;
+    const previous = fileStoreWriteQueues.get(queueKey) ?? Promise.resolve();
     const next = previous.then(async () => {
       await mkdir(this.directory, {recursive:true,mode:0o700});
       const current = await this.load(checkpoint.runId);
@@ -141,11 +142,11 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
         await rm(temporary, {force:true});
       }
     });
-    this.writeQueues.set(checkpoint.runId, next);
+    fileStoreWriteQueues.set(queueKey, next);
     try {
       await next;
     } finally {
-      if (this.writeQueues.get(checkpoint.runId) === next) this.writeQueues.delete(checkpoint.runId);
+      if (fileStoreWriteQueues.get(queueKey) === next) fileStoreWriteQueues.delete(queueKey);
     }
   }
 }
