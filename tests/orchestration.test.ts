@@ -168,6 +168,9 @@ describe("workflow runtime",()=>{
       {id:"task",skill:"checkpoint.write-failure",input:{},dependsOn:[]},
     ]},registry,{runId:"write-failure-1",checkpointStore:store})).rejects.toThrow(/disk unavailable/i);
     expect(execute).not.toHaveBeenCalled();
+    await expect(executeWorkflow({id:"write-failure",tasks:[
+      {id:"task",skill:"checkpoint.write-failure",input:{},dependsOn:[]},
+    ]},registry,{runId:" ",checkpointStore:store})).rejects.toThrow(/runId must be non-empty/i);
   });
 
   it("rejects checkpoint resume when workflow definition or skill version changes", async () => {
