@@ -1,32 +1,15 @@
-# Workflow run checkpoints
+# Workflow checkpoint storage
 
-The orchestration package exposes a versioned checkpoint format and a pluggable
-`WorkflowRunStore` contract. Checkpoints identify a run independently from the
-workflow ID and include a SHA-256 fingerprint of the workflow definition.
+The orchestration runtime now supports checkpoint persistence and safe resume through
+the `WorkflowRunStore` contract.
 
-## Store contract
+- Use `InMemoryWorkflowRunStore` for tests and ephemeral single-process execution.
+- Use `FileWorkflowRunStore` for durable local-disk checkpoints in a single process.
+- Implement a transactional or compare-and-swap adapter for multi-worker deployments.
 
-- `load(runId)` returns a validated checkpoint or `null`.
-- `save(checkpoint)` atomically replaces the checkpoint for that run.
-- Revisions must increase monotonically. The in-memory adapter enforces this rule.
-- Persistent adapters shared by multiple workers must implement transactional or
-  compare-and-swap writes; a process-local mutex is not sufficient.
+See [workflow checkpoint persistence and resume](./workflow-checkpoint-resume.md) for
+usage, recovery policy, provider idempotency keys, JSON compatibility constraints,
+and the guarantees and limitations of each adapter.
 
-`InMemoryWorkflowRunStore` is intended for tests and single-process use only. It
-does not survive process restarts and is not a production durable backend.
-
-## Execution safety
-
-This package addition defines storage primitives only; it does not yet claim that
-workflow execution can resume automatically. A future runtime integration must
-validate workflow fingerprints and skill versions before restoring outputs.
-
-A task left in `running` when a process disappears is indeterminate: the provider
-may have performed an external side effect before the checkpoint was updated.
-Do not automatically rerun such a task unless the skill explicitly guarantees
-safe repetition (for example through durable idempotency keys or deduplication).
-Exactly-once execution of external effects cannot be guaranteed by checkpoint
-storage alone.
-
-Checkpoint schema version 1 supports task states: `pending`, `running`,
-`completed`, `failed`, `skipped`, `cancelled`, and `indeterminate`.
+Checkpoint storage does not provide exactly-once external side effects. Interrupted
+tasks are only replayed when their registered skill explicitly declares `retrySafe: true`.
