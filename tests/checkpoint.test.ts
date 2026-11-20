@@ -14,6 +14,7 @@ describe("workflow checkpoints",()=>{
   it("rejects completed tasks without output and failed tasks without error",()=>{
     const {output: _output, ...taskWithoutOutput}=checkpoint.tasks[0]!;
     expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[taskWithoutOutput]})).toThrow();
+    expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...checkpoint.tasks[0]!,output:undefined}]})).toThrow();
     expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...taskWithoutOutput,status:"failed"}]})).toThrow();
   });
   it("stores defensive copies and requires increasing revisions",async()=>{
@@ -57,5 +58,7 @@ describe("workflow checkpoints",()=>{
     const reordered: typeof first={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{a:1,b:2},dependsOn:[]}]};
     expect(fingerprintWorkflow(first)).toBe(fingerprintWorkflow(reordered));
     expect(fingerprintWorkflow(first)).not.toBe(fingerprintWorkflow({...first,tasks:[{...first.tasks[0]!,input:{a:2,b:2}}]}));
+    expect(()=>fingerprintWorkflow({...first,tasks:[{...first.tasks[0]!,input:{missing:undefined}}]})).toThrow(/non-json value/i);
+    expect(()=>fingerprintWorkflow({...first,tasks:[{...first.tasks[0]!,input:{notFinite:Number.NaN}}]})).toThrow(/non-json value/i);
   });
 });
