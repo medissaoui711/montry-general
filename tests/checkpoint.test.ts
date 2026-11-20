@@ -48,6 +48,22 @@ describe("workflow checkpoints",()=>{
     }
   });
 
+
+  it("rejects outputs that JSON serialization would silently mutate",async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoints-"));
+    try {
+      const store=new FileWorkflowRunStore(directory);
+      await expect(store.save({...checkpoint,tasks:[{...checkpoint.tasks[0]!,output:{createdAt:new Date()}}]}))
+        .rejects.toThrow(/non-plain object/i);
+      const circular: Record<string,unknown>={};
+      circular.self=circular;
+      await expect(store.save({...checkpoint,tasks:[{...checkpoint.tasks[0]!,output:circular}]}))
+        .rejects.toThrow(/circular reference/i);
+    } finally {
+      await rm(directory,{recursive:true,force:true});
+    }
+  });
+
   it("hashes run IDs before using them as filesystem names",async()=>{
     const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoints-"));
     try {
