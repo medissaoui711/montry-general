@@ -110,6 +110,8 @@ describe("workflow runtime",()=>{
     const first = vi.fn(() => ({value:"saved"}));
     let secondCalls = 0;
     const controller = new AbortController();
+    let markSecondStarted!: () => void;
+    const secondStarted = new Promise<void>((resolve) => { markSecondStarted = resolve; });
     const skills = new SkillRegistry()
       .register({id:"checkpoint.first",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({value:z.string()}),execute:first})
       .register({
@@ -117,7 +119,7 @@ describe("workflow runtime",()=>{
         execute:(_input,context) => {
           secondCalls += 1;
           if (secondCalls === 1) {
-            controller.abort("simulate interruption after first task");
+            markSecondStarted();
             return new Promise<{done:boolean}>((_resolve,reject) => {
               context.signal.addEventListener("abort",() => reject(new Error("cancelled")),{once:true});
             });
@@ -129,7 +131,10 @@ describe("workflow runtime",()=>{
       {id:"first",skill:"checkpoint.first",input:{},dependsOn:[]},
       {id:"second",skill:"checkpoint.second",input:{},dependsOn:["first"]},
     ]};
-    const initial = await executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,signal:controller.signal});
+    const running = executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,signal:controller.signal});
+    await secondStarted;
+    controller.abort("simulate interruption after first task");
+    const initial = await running;
     expect(initial.status).toBe("cancelled");
     expect((await store.load("resume-1"))?.tasks.map((task)=>task.status)).toEqual(["completed","cancelled"]);
 
