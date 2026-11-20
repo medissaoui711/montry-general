@@ -231,7 +231,7 @@ export async function executeWorkflow(
       if (options.signal?.aborted) { cancelled = true; break; }
       const chunk = layer.slice(offset, offset + maxConcurrency).filter((taskId) => !results.has(taskId));
       if (chunk.length === 0) continue;
-      const chunkResults = await Promise.all(chunk.map(async (taskId): Promise<TaskExecutionResult> => {
+      const settledChunk = await Promise.allSettled(chunk.map(async (taskId): Promise<TaskExecutionResult> => {
         const planned = plannedById.get(taskId)!;
         const task = taskById.get(taskId)!;
         const skill = registry.get(planned.skillId);
@@ -292,6 +292,9 @@ export async function executeWorkflow(
           return {taskId,skillId:planned.skillId,status:"failed",error:message};
         }
       }));
+      const rejectedTask = settledChunk.find((item): item is PromiseRejectedResult => item.status === "rejected");
+      if (rejectedTask) throw rejectedTask.reason;
+      const chunkResults = settledChunk.map((item) => (item as PromiseFulfilledResult<TaskExecutionResult>).value);
       for (const result of chunkResults) results.set(result.taskId, result);
       if (options.signal?.aborted) { cancelled = true; break; }
       if (chunkResults.some((result) => result.status === "failed" || result.status === "cancelled")) {
