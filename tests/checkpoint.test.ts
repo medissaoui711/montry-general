@@ -24,9 +24,9 @@ describe("workflow checkpoints",()=>{
     expect((await store.load("run-1"))!.revision).toBe(2);
   });
   it("fingerprints object keys independent of insertion order and changes with workflow inputs",()=>{
-    const first={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{b:2,a:1},dependsOn:[]}]};
-    const reordered={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{a:1,b:2},dependsOn:[]}]};
+    const first: {id:string;tasks:{id:string;skill:string;input:Record<string,unknown>;dependsOn:string[]}[]}={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{b:2,a:1},dependsOn:[]}]};
+    const reordered: typeof first={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{a:1,b:2},dependsOn:[]}]};
     expect(fingerprintWorkflow(first)).toBe(fingerprintWorkflow(reordered));
-    expect(fingerprintWorkflow(first)).not.toBe(fingerprintWorkflow({...first,tasks:[{...first.tasks[0],input:{a:2,b:2}}]}));
+    expect(fingerprintWorkflow(first)).not.toBe(fingerprintWorkflow({...first,tasks:[{...first.tasks[0]!,input:{a:2,b:2}}]}));
   });
 });
