@@ -4,7 +4,7 @@ Pass `runId` and `checkpointStore` together to enable checkpoint persistence.
 Pass `resume: true` as well to restore a previously saved run.
 
 ```ts
-const store = new InMemoryWorkflowRunStore();
+const store = new FileWorkflowRunStore("./.montry/checkpoints");
 const result = await executeWorkflow(workflow, registry, {
   runId: "customer-request-2026-001",
   checkpointStore: store,
