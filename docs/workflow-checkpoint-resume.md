@@ -11,9 +11,12 @@ const result = await executeWorkflow(workflow, registry, {
 });
 ```
 
-The in-memory adapter is process-local and is intended for tests or single-process
-workflows. A production adapter must persist checkpoints durably and provide atomic,
-monotonic per-run writes (for example with a database transaction or compare-and-swap).
+`InMemoryWorkflowRunStore` is process-local and intended for tests or ephemeral runs.
+`FileWorkflowRunStore` persists JSON checkpoints to local disk, uses restrictive file
+permissions, hashes run IDs into filenames, and replaces files through a same-directory
+atomic rename. It serializes writes within one store instance. Do not share its directory
+between multiple processes: use a database-backed adapter with transactions or
+compare-and-swap for multi-worker deployments.
 
 ## Persistence guarantees
 
@@ -45,8 +48,9 @@ the next resume applies the same conservative replay policy.
 
 ## Limits
 
-- Checkpoint storage is a pluggable contract; no filesystem, SQLite, or hosted database
-  adapter is included in this package.
+- `FileWorkflowRunStore` is a durable single-process adapter; it is not a distributed
+  lock or multi-process compare-and-swap implementation.
+- Hosted database adapters remain pluggable and must provide atomic per-run writes.
 - Concurrent workers must coordinate through an atomic backend. The runtime's local
   write queue only serializes writes made by one invocation.
 - A workflow fingerprint change or skill version change requires a new run ID or an
