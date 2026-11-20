@@ -1,4 +1,5 @@
 import {z} from "zod";
+import type {WorkflowRunStore} from "./checkpoint";
 
 export const SkillIdSchema = z.string().trim().min(1).regex(/^[a-z0-9][a-z0-9._/-]*$/i);
 export const SkillCapabilitySchema = z.string().trim().min(1).regex(/^[a-z0-9][a-z0-9._/-]*$/i);
@@ -103,6 +104,12 @@ export type WorkflowExecutionOptions = {
   maxRetryDelayMs?: number;
   /** Cancels active tasks and prevents subsequent tasks from being scheduled. */
   signal?: AbortSignal;
+  /** Stable identifier required when checkpoint persistence is enabled. */
+  runId?: string;
+  /** Optional checkpoint backend. Must provide atomic per-run saves. */
+  checkpointStore?: WorkflowRunStore;
+  /** Restore completed outputs from an existing checkpoint. Requires runId and checkpointStore. */
+  resume?: boolean;
   /** Observer errors are isolated and never fail workflow execution. */
   onEvent?: (event: WorkflowExecutionEvent) => void;
 };

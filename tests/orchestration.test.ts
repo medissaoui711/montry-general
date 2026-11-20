@@ -5,12 +5,14 @@ import {describe, expect, it, vi} from "vitest";
 import {z} from "zod";
 import {
   executeWorkflow,
+  InMemoryWorkflowRunStore,
   loadSkillCatalog,
   planWorkflow,
   previewWorkflow,
   SkillRegistry,
   type WorkflowDefinition,
 } from "../src/orchestration";
+import {fingerprintWorkflow} from "../src/orchestration/checkpoint";
 
 const makeRegistry = () => new SkillRegistry()
   .register({id:"creative.brief",version:"1.0.0",capabilities:["creative.brief"],inputSchema:z.object({topic:z.string()}),outputSchema:z.object({summary:z.string()}),execute:({topic})=>({summary:`Brief: ${topic}`})})
@@ -102,6 +104,85 @@ describe("workflow runtime",()=>{
     expect(result.tasks.map((t)=>t.status)).toEqual(["completed","completed","completed"]);
     expect(result.outputs.render).toEqual({asset:"render.mp4"});
   });
+
+  it("persists completed task outputs and resumes without rerunning them", async () => {
+    const store = new InMemoryWorkflowRunStore();
+    const first = vi.fn(() => ({value:"saved"}));
+    let secondCalls = 0;
+    const controller = new AbortController();
+    let markSecondStarted!: () => void;
+    const secondStarted = new Promise<void>((resolve) => { markSecondStarted = resolve; });
+    const skills = new SkillRegistry()
+      .register({id:"checkpoint.first",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({value:z.string()}),execute:first})
+      .register({
+        id:"checkpoint.second",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({done:z.boolean()}),
+        execute:(_input,context) => {
+          secondCalls += 1;
+          if (secondCalls === 1) {
+            markSecondStarted();
+            return new Promise<{done:boolean}>((_resolve,reject) => {
+              context.signal.addEventListener("abort",() => reject(new Error("cancelled")),{once:true});
+            });
+          }
+          return {done:true};
+        },
+      });
+    const definition: WorkflowDefinition = {id:"checkpoint-resume",tasks:[
+      {id:"first",skill:"checkpoint.first",input:{},dependsOn:[]},
+      {id:"second",skill:"checkpoint.second",input:{},dependsOn:["first"]},
+    ]};
+    const running = executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,signal:controller.signal});
+    await secondStarted;
+    controller.abort("simulate interruption after first task");
+    const initial = await running;
+    expect(initial.status).toBe("cancelled");
+    expect((await store.load("resume-1"))?.tasks.map((task)=>task.status)).toEqual(["completed","cancelled"]);
+
+    const resumed = await executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,resume:true});
+    expect(resumed.status).toBe("completed");
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(secondCalls).toBe(2);
+    expect(resumed.outputs.first).toEqual({value:"saved"});
+  });
+
+  it("rejects checkpoint resume when workflow definition or skill version changes", async () => {
+    const store = new InMemoryWorkflowRunStore();
+    const definition: WorkflowDefinition = {id:"fingerprint-check",tasks:[
+      {id:"task",skill:"checkpoint.skill",input:{value:1},dependsOn:[]},
+    ]};
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.skill",version:"1.0.0",inputSchema:z.object({value:z.number()}),outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true}),
+    });
+    const checkpoint = {
+      schemaVersion:1 as const,runId:"fingerprint-1",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"checkpoint.skill",skillVersion:"1.0.0",status:"pending" as const,updatedAt:Date.now()}],
+      updatedAt:Date.now(),
+    };
+    await store.save(checkpoint);
+    await expect(executeWorkflow({...definition,tasks:[{...definition.tasks[0]!,input:{value:2}}]},registry,{
+      runId:"fingerprint-1",checkpointStore:store,resume:true,
+    })).rejects.toThrow(/fingerprint/i);
+  });
+
+  it("refuses to automatically replay interrupted tasks unless retrySafe is explicit", async () => {
+    const store = new InMemoryWorkflowRunStore();
+    const definition: WorkflowDefinition = {id:"indeterminate-check",tasks:[
+      {id:"task",skill:"checkpoint.unsafe",input:{},dependsOn:[]},
+    ]};
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.unsafe",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true}),
+    });
+    await store.save({
+      schemaVersion:1,runId:"indeterminate-1",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"checkpoint.unsafe",skillVersion:"1.0.0",status:"running",updatedAt:Date.now()}],
+      updatedAt:Date.now(),
+    });
+    await expect(executeWorkflow(definition,registry,{runId:"indeterminate-1",checkpointStore:store,resume:true}))
+      .rejects.toThrow(/not declared retrySafe/i);
+  });
+
   it("runs independent tasks with the requested concurrency bound", async () => {
     let active = 0;
     let maximumActive = 0;
