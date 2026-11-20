@@ -7,6 +7,7 @@ import type {
 } from "./contracts";
 import {
   fingerprintWorkflow,
+  workflowTaskIdempotencyKey,
   WorkflowCheckpointSchema,
   type WorkflowCheckpoint,
   type WorkflowCheckpointTask,
@@ -119,6 +120,9 @@ export async function executeWorkflow(
   if (Boolean(options.runId) !== Boolean(options.checkpointStore)) {
     throw new Error("runId and checkpointStore must be provided together.");
   }
+  if (options.runId !== undefined && (!options.runId.trim() || options.runId !== options.runId.trim())) {
+    throw new Error("runId must be non-empty and must not contain surrounding whitespace.");
+  }
   if (options.resume && !options.checkpointStore) {
     throw new Error("resume requires runId and checkpointStore.");
   }
@@ -129,11 +133,13 @@ export async function executeWorkflow(
   const outputs: Record<string, unknown> = {};
   const results = new Map<string, TaskExecutionResult>();
   let checkpoint: WorkflowCheckpoint | undefined;
+  let runFingerprint: string | undefined;
   let writeQueue: Promise<void> = Promise.resolve();
 
   if (options.checkpointStore && options.runId) {
     const store = options.checkpointStore;
     const fingerprint = fingerprintWorkflow(definition);
+    runFingerprint = fingerprint;
     const now = Date.now();
     if (options.resume) {
       const loaded = await store.load(options.runId);
@@ -231,7 +237,7 @@ export async function executeWorkflow(
       if (options.signal?.aborted) { cancelled = true; break; }
       const chunk = layer.slice(offset, offset + maxConcurrency).filter((taskId) => !results.has(taskId));
       if (chunk.length === 0) continue;
-      const chunkResults = await Promise.all(chunk.map(async (taskId): Promise<TaskExecutionResult> => {
+      const settledChunk = await Promise.allSettled(chunk.map(async (taskId): Promise<TaskExecutionResult> => {
         const planned = plannedById.get(taskId)!;
         const task = taskById.get(taskId)!;
         const skill = registry.get(planned.skillId);
@@ -258,6 +264,7 @@ export async function executeWorkflow(
                 (signal) => skill.execute(input.data, {
                   workflowId:definition.id,taskId,dependencies,signal,
                   ...(deadlineAt === undefined ? {} : {deadlineAt}),
+                  ...(options.runId && runFingerprint ? {idempotencyKey:workflowTaskIdempotencyKey(options.runId,runFingerprint,taskId)} : {}),
                 }),
                 options.signal,
                 taskTimeoutMs,
@@ -292,6 +299,9 @@ export async function executeWorkflow(
           return {taskId,skillId:planned.skillId,status:"failed",error:message};
         }
       }));
+      const rejectedTask = settledChunk.find((item): item is PromiseRejectedResult => item.status === "rejected");
+      if (rejectedTask) throw rejectedTask.reason;
+      const chunkResults = settledChunk.map((item) => (item as PromiseFulfilledResult<TaskExecutionResult>).value);
       for (const result of chunkResults) results.set(result.taskId, result);
       if (options.signal?.aborted) { cancelled = true; break; }
       if (chunkResults.some((result) => result.status === "failed" || result.status === "cancelled")) {

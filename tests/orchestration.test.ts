@@ -109,6 +109,7 @@ describe("workflow runtime",()=>{
     const store = new InMemoryWorkflowRunStore();
     const first = vi.fn(() => ({value:"saved"}));
     let secondCalls = 0;
+    const idempotencyKeys: string[] = [];
     const controller = new AbortController();
     let markSecondStarted!: () => void;
     const secondStarted = new Promise<void>((resolve) => { markSecondStarted = resolve; });
@@ -118,6 +119,7 @@ describe("workflow runtime",()=>{
         id:"checkpoint.second",version:"1.0.0",retrySafe:true,inputSchema:z.object({}),outputSchema:z.object({done:z.boolean()}),
         execute:(_input,context) => {
           secondCalls += 1;
+          idempotencyKeys.push(context.idempotencyKey ?? "missing");
           if (secondCalls === 1) {
             markSecondStarted();
             return new Promise<{done:boolean}>((_resolve,reject) => {
@@ -142,7 +144,33 @@ describe("workflow runtime",()=>{
     expect(resumed.status).toBe("completed");
     expect(first).toHaveBeenCalledTimes(1);
     expect(secondCalls).toBe(2);
+    expect(idempotencyKeys).toHaveLength(2);
+    expect(idempotencyKeys[0]).toBe(idempotencyKeys[1]);
+    expect(idempotencyKeys[0]).not.toBe("missing");
     expect(resumed.outputs.first).toEqual({value:"saved"});
+  });
+
+
+  it("does not invoke a provider when the running checkpoint cannot be saved", async () => {
+    let saves = 0;
+    const store = {
+      load: async () => null,
+      save: async () => {
+        saves += 1;
+        if (saves === 2) throw new Error("checkpoint disk unavailable");
+      },
+    };
+    const execute = vi.fn(() => ({ok:true}));
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.write-failure",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    await expect(executeWorkflow({id:"write-failure",tasks:[
+      {id:"task",skill:"checkpoint.write-failure",input:{},dependsOn:[]},
+    ]},registry,{runId:"write-failure-1",checkpointStore:store})).rejects.toThrow(/disk unavailable/i);
+    expect(execute).not.toHaveBeenCalled();
+    await expect(executeWorkflow({id:"write-failure",tasks:[
+      {id:"task",skill:"checkpoint.write-failure",input:{},dependsOn:[]},
+    ]},registry,{runId:" ",checkpointStore:store})).rejects.toThrow(/runId must be non-empty/i);
   });
 
   it("rejects checkpoint resume when workflow definition or skill version changes", async () => {

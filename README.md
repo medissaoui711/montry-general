@@ -17,9 +17,11 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 - Stable topological planning with cycle, reference and duplicate validation.
 - Dependency-scoped outputs, runtime schema validation and fail-fast execution.
 - Bounded parallel execution, cooperative cancellation, per-attempt timeouts, safe opt-in retries and structured lifecycle events.
+- Versioned workflow checkpoints, completed-output restoration, and safe resume with provider idempotency keys.
+- Durable local-disk checkpoint storage for single-process deployments; pluggable stores for transactional multi-worker backends.
 - Safe metadata discovery: no dynamic imports, shell execution, package installation or network access.
 
-See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md) and [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md).
+See [skills orchestration](docs/skills-orchestration.md), [skill catalog](docs/skill-catalog.md), [bounded workflow execution](docs/bounded-workflow-execution.md), [workflow lifecycle controls](docs/workflow-lifecycle-controls.md), [workflow checkpoint recovery](docs/workflow-checkpoint-resume.md) and [checkpoint storage](docs/workflow-checkpoints.md).
 
 ## Current video capability
 
@@ -57,7 +59,7 @@ Provider Health ------ Capability Resolver
 
 ## Repository layout
 
-- `src/orchestration/`: contracts, manifest catalog, registry, capability resolver, planner and runtime.
+- `src/orchestration/`: contracts, manifest catalog, registry, capability resolver, planner, checkpoint stores and runtime.
 - `src/schema.ts`: brand and reel input contracts.
 - `src/timeline.ts`: deterministic frame timeline and word reveal.
 - `src/Reel.tsx`: Remotion scene composition and locked ending.
@@ -111,9 +113,37 @@ The renderer rejects missing logos, sample identity placeholders, invalid dimens
 
 See [docs/audio-provider-adapters.md](docs/audio-provider-adapters.md). The core orchestration runtime works without either provider.
 
-## Current runtime boundary
+## Durable workflow execution
 
-The in-process runtime supports health-aware provider resolution, bounded parallel scheduling, cooperative cancellation, per-attempt timeouts, explicit idempotency-gated retries and structured lifecycle events. It does not yet claim persistence, sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot remain optional adapters behind explicit skill contracts.
+The runtime can persist workflow runs through the `WorkflowRunStore` contract and
+resume them with `runId`, `checkpointStore` and `resume: true`.
+
+```ts
+import {executeWorkflow, FileWorkflowRunStore} from "./src/orchestration";
+
+const store = new FileWorkflowRunStore("./.montry/checkpoints");
+const result = await executeWorkflow(workflow, registry, {
+  runId: "request-2026-001",
+  checkpointStore: store,
+});
+
+// Restore completed outputs and continue eligible tasks after a restart.
+const resumed = await executeWorkflow(workflow, registry, {
+  runId: "request-2026-001",
+  checkpointStore: store,
+  resume: true,
+});
+```
+
+The filesystem adapter is durable across restarts but is intended for one Node.js
+process. Multi-worker deployments need a transactional or compare-and-swap store.
+Interrupted tasks are only replayed when the skill explicitly declares `retrySafe: true`;
+providers receive a stable `context.idempotencyKey` to deduplicate external effects.
+Checkpointed inputs and outputs must be JSON-compatible.
+
+This is durable single-process recovery, not distributed execution, sandbox isolation,
+or an exactly-once guarantee for external side effects. External providers such as
+Openverse and Earshot remain optional adapters behind explicit skill contracts.
 
 ## Quality gates
 
