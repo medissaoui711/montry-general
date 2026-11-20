@@ -21,6 +21,8 @@ compare-and-swap for multi-worker deployments.
 ## Persistence guarantees
 
 - A new run writes its initial pending-task checkpoint before any provider executes.
+- Checkpointed workflow inputs and outputs must be JSON-compatible; undefined values,
+  non-finite numbers, and non-plain objects are rejected rather than silently changed.
 - A task is persisted as `running` before its provider is invoked.
 - A validated output is persisted as `completed` before dependent tasks are scheduled.
 - Writes are serialized within one execution so parallel tasks cannot overwrite each
@@ -35,6 +37,11 @@ A task restored as `running`, `indeterminate`, `failed`, or `cancelled` is only
 eligible for automatic replay when its skill declares `retrySafe: true`. Otherwise
 resume fails closed and explains which task needs operator intervention. Skipped tasks
 return to pending because they were not invoked by the previous execution.
+
+The runtime supplies a stable `context.idempotencyKey` whenever checkpointing is enabled.
+It is derived from the run ID, workflow fingerprint, and task ID, and remains stable
+across retries and resumes. Providers should forward it to external APIs or store it in
+their own deduplication ledger.
 
 A process may crash after a provider performs an external side effect but before its
 completed output is durably saved. Such a task is indistinguishable from an interrupted
