@@ -145,6 +145,26 @@ describe("workflow runtime",()=>{
     expect(resumed.outputs.first).toEqual({value:"saved"});
   });
 
+
+  it("does not invoke a provider when the running checkpoint cannot be saved", async () => {
+    let saves = 0;
+    const store = {
+      load: async () => null,
+      save: async () => {
+        saves += 1;
+        if (saves === 2) throw new Error("checkpoint disk unavailable");
+      },
+    };
+    const execute = vi.fn(() => ({ok:true}));
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.write-failure",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    await expect(executeWorkflow({id:"write-failure",tasks:[
+      {id:"task",skill:"checkpoint.write-failure",input:{},dependsOn:[]},
+    ]},registry,{runId:"write-failure-1",checkpointStore:store})).rejects.toThrow(/disk unavailable/i);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("rejects checkpoint resume when workflow definition or skill version changes", async () => {
     const store = new InMemoryWorkflowRunStore();
     const definition: WorkflowDefinition = {id:"fingerprint-check",tasks:[
