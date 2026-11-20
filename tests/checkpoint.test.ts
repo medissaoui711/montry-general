@@ -9,8 +9,9 @@ const checkpoint = {
 describe("workflow checkpoints",()=>{
   it("validates versioned checkpoint records",()=>expect(WorkflowCheckpointSchema.parse(checkpoint)).toEqual(checkpoint));
   it("rejects completed tasks without output and failed tasks without error",()=>{
-    expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...checkpoint.tasks[0],output:undefined}]})).toThrow();
-    expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...checkpoint.tasks[0],status:"failed",output:undefined}]})).toThrow();
+    const {output: _output, ...taskWithoutOutput}=checkpoint.tasks[0]!;
+    expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[taskWithoutOutput]})).toThrow();
+    expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...taskWithoutOutput,status:"failed"}]})).toThrow();
   });
   it("stores defensive copies and requires increasing revisions",async()=>{
     const store=new InMemoryWorkflowRunStore();
