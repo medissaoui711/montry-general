@@ -36,7 +36,7 @@ export type WorkflowCheckpoint = z.infer<typeof WorkflowCheckpointSchema>;
 
 /** Stable across retries and resumes of the same run/task; suitable for provider deduplication. */
 export function workflowTaskIdempotencyKey(runId: string, workflowFingerprint: string, taskId: string): string {
-  return createHash("sha256").update([runId,workflowFingerprint,taskId].join("\\0")).digest("hex");
+  return createHash("sha256").update(JSON.stringify([runId,workflowFingerprint,taskId])).digest("hex");
 }
 
 /**
@@ -119,7 +119,7 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
 
   async save(value: WorkflowCheckpoint): Promise<void> {
     const checkpoint = WorkflowCheckpointSchema.parse(value);
-    const queueKey = `${path.resolve(this.directory)}\\0${checkpoint.runId}`;
+    const queueKey = JSON.stringify([path.resolve(this.directory),checkpoint.runId]);
     const previous = fileStoreWriteQueues.get(queueKey) ?? Promise.resolve();
     const next = previous.then(async () => {
       await mkdir(this.directory, {recursive:true,mode:0o700});
