@@ -7,6 +7,7 @@ import type {
 } from "./contracts";
 import {
   fingerprintWorkflow,
+  workflowTaskIdempotencyKey,
   WorkflowCheckpointSchema,
   type WorkflowCheckpoint,
   type WorkflowCheckpointTask,
@@ -129,11 +130,13 @@ export async function executeWorkflow(
   const outputs: Record<string, unknown> = {};
   const results = new Map<string, TaskExecutionResult>();
   let checkpoint: WorkflowCheckpoint | undefined;
+  let runFingerprint: string | undefined;
   let writeQueue: Promise<void> = Promise.resolve();
 
   if (options.checkpointStore && options.runId) {
     const store = options.checkpointStore;
     const fingerprint = fingerprintWorkflow(definition);
+    runFingerprint = fingerprint;
     const now = Date.now();
     if (options.resume) {
       const loaded = await store.load(options.runId);
@@ -258,6 +261,7 @@ export async function executeWorkflow(
                 (signal) => skill.execute(input.data, {
                   workflowId:definition.id,taskId,dependencies,signal,
                   ...(deadlineAt === undefined ? {} : {deadlineAt}),
+                  ...(options.runId && runFingerprint ? {idempotencyKey:workflowTaskIdempotencyKey(options.runId,runFingerprint,taskId)} : {}),
                 }),
                 options.signal,
                 taskTimeoutMs,
