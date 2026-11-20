@@ -88,6 +88,30 @@ export class InMemoryWorkflowRunStore implements WorkflowRunStore {
 
 const fileStoreWriteQueues = new Map<string, Promise<void>>();
 
+function assertJsonValue(value: unknown, seen = new Set<object>()): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number" && Number.isFinite(value)) return;
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new Error("Checkpoint output contains a circular reference.");
+    seen.add(value);
+    for (const item of value) assertJsonValue(item,seen);
+    seen.delete(value);
+    return;
+  }
+  if (typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error("Checkpoint output contains a non-plain object that is not JSON-compatible.");
+    }
+    if (seen.has(value)) throw new Error("Checkpoint output contains a circular reference.");
+    seen.add(value);
+    for (const item of Object.values(value as Record<string,unknown>)) assertJsonValue(item,seen);
+    seen.delete(value);
+    return;
+  }
+  throw new Error("Checkpoint output contains a non-JSON value.");
+}
+
 /**
  * Durable local-disk adapter. Writes use a same-directory temporary file and atomic
  * rename. It serializes writes within this instance; do not share a directory between
@@ -119,6 +143,7 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
 
   async save(value: WorkflowCheckpoint): Promise<void> {
     const checkpoint = WorkflowCheckpointSchema.parse(value);
+    for (const task of checkpoint.tasks) if (task.status === "completed") assertJsonValue(task.output);
     const queueKey = JSON.stringify([path.resolve(this.directory),checkpoint.runId]);
     const previous = fileStoreWriteQueues.get(queueKey) ?? Promise.resolve();
     const next = previous.then(async () => {
