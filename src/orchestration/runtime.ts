@@ -5,6 +5,12 @@ import type {
   WorkflowExecutionOptions,
   WorkflowExecutionResult,
 } from "./contracts";
+import {
+  fingerprintWorkflow,
+  WorkflowCheckpointSchema,
+  type WorkflowCheckpoint,
+  type WorkflowCheckpointTask,
+} from "./checkpoint";
 import {previewWorkflow} from "./planner";
 import {SkillRegistry} from "./registry";
 
@@ -76,8 +82,9 @@ async function executeWithControls(
 }
 
 /**
- * Executes dependency layers in bounded chunks.
- * Cancellation prevents future scheduling; providers must honor context.signal to stop their own work.
+ * Executes dependency layers in bounded chunks. When a checkpoint store is configured,
+ * each provider invocation is preceded by a durable running snapshot and each successful
+ * output is persisted before dependent tasks can be scheduled.
  */
 export async function executeWorkflow(
   definition: WorkflowDefinition,
@@ -109,11 +116,112 @@ export async function executeWorkflow(
     throw new Error("maxRetryDelayMs must be an integer between 0 and 60000.");
   }
 
+  if (Boolean(options.runId) !== Boolean(options.checkpointStore)) {
+    throw new Error("runId and checkpointStore must be provided together.");
+  }
+  if (options.resume && !options.checkpointStore) {
+    throw new Error("resume requires runId and checkpointStore.");
+  }
+
   const preview = previewWorkflow(definition, registry);
   const taskById = new Map(definition.tasks.map((task) => [task.id, task]));
   const plannedById = new Map(preview.tasks.map((task) => [task.taskId, task]));
   const outputs: Record<string, unknown> = {};
   const results = new Map<string, TaskExecutionResult>();
+  let checkpoint: WorkflowCheckpoint | undefined;
+  let writeQueue: Promise<void> = Promise.resolve();
+
+  if (options.checkpointStore && options.runId) {
+    const store = options.checkpointStore;
+    const fingerprint = fingerprintWorkflow(definition);
+    const now = Date.now();
+    if (options.resume) {
+      const loaded = await store.load(options.runId);
+      if (!loaded) throw new Error(`No checkpoint exists for run "${options.runId}".`);
+      checkpoint = WorkflowCheckpointSchema.parse(loaded);
+      if (checkpoint.runId !== options.runId || checkpoint.workflowId !== definition.id) {
+        throw new Error("Checkpoint runId or workflowId does not match this workflow execution.");
+      }
+      if (checkpoint.workflowFingerprint !== fingerprint) {
+        throw new Error("Workflow definition fingerprint does not match the saved checkpoint.");
+      }
+      const checkpointById = new Map(checkpoint.tasks.map((task) => [task.taskId, task]));
+      if (checkpointById.size !== preview.tasks.length || preview.tasks.some((task) => !checkpointById.has(task.taskId))) {
+        throw new Error("Checkpoint task set does not match the current workflow plan.");
+      }
+      let normalized = false;
+      for (const planned of preview.tasks) {
+        const saved = checkpointById.get(planned.taskId)!;
+        if (saved.skillId !== planned.skillId || saved.skillVersion !== planned.version) {
+          throw new Error(`Checkpoint skill identity/version mismatch for task "${planned.taskId}".`);
+        }
+        const skill = registry.get(planned.skillId);
+        if (saved.status === "completed") {
+          const parsedOutput = skill.outputSchema.safeParse(saved.output);
+          if (!parsedOutput.success) throw new Error(`Saved output for task "${planned.taskId}" no longer matches its skill output contract.`);
+          outputs[planned.taskId] = parsedOutput.data;
+          results.set(planned.taskId,{taskId:planned.taskId,skillId:planned.skillId,status:"completed",output:parsedOutput.data});
+        } else if (saved.status === "pending" || saved.status === "skipped") {
+          if (saved.status === "skipped") normalized = true;
+        } else {
+          if (skill.retrySafe !== true) {
+            throw new Error(`Task "${planned.taskId}" has checkpoint status "${saved.status}" and is not declared retrySafe; refusing possible duplicate side effects.`);
+          }
+          normalized = true;
+        }
+      }
+      if (normalized) {
+        checkpoint = {
+          ...checkpoint,
+          revision:checkpoint.revision + 1,
+          updatedAt:now,
+          tasks:checkpoint.tasks.map((task) => ({
+            ...task,
+            ...(task.status === "completed" ? {} : {status:"pending" as const,error:undefined,output:undefined,updatedAt:now}),
+          })),
+        };
+        await store.save(checkpoint);
+      }
+    } else {
+      if (await store.load(options.runId)) {
+        throw new Error(`Checkpoint already exists for run "${options.runId}"; set resume:true to restore it.`);
+      }
+      checkpoint = {
+        schemaVersion:1,
+        runId:options.runId,
+        workflowId:definition.id,
+        workflowFingerprint:fingerprint,
+        revision:0,
+        tasks:preview.tasks.map((task): WorkflowCheckpointTask => ({
+          taskId:task.taskId,skillId:task.skillId,skillVersion:task.version,status:"pending",updatedAt:now,
+        })),
+        updatedAt:now,
+      };
+      await store.save(checkpoint);
+    }
+  }
+
+  const persistTask = async (
+    taskId: string,
+    update: (current: WorkflowCheckpointTask) => WorkflowCheckpointTask,
+  ): Promise<void> => {
+    if (!checkpoint || !options.checkpointStore) return;
+    writeQueue = writeQueue.then(async () => {
+      const current = checkpoint!.tasks.find((task) => task.taskId === taskId);
+      if (!current) throw new Error(`Checkpoint is missing task "${taskId}".`);
+      const nextTask = WorkflowCheckpointSchema.shape.tasks.element.parse(update(current));
+      const next: WorkflowCheckpoint = {
+        ...checkpoint!,
+        revision:checkpoint!.revision + 1,
+        updatedAt:Date.now(),
+        tasks:checkpoint!.tasks.map((task) => task.taskId === taskId ? nextTask : task),
+      };
+      await options.checkpointStore!.save(next);
+      checkpoint = next;
+    });
+    await writeQueue;
+  };
+
   let stopped = false;
   let cancelled = options.signal?.aborted ?? false;
 
@@ -121,7 +229,8 @@ export async function executeWorkflow(
     if (stopped || cancelled) break;
     for (let offset = 0; offset < layer.length; offset += maxConcurrency) {
       if (options.signal?.aborted) { cancelled = true; break; }
-      const chunk = layer.slice(offset, offset + maxConcurrency);
+      const chunk = layer.slice(offset, offset + maxConcurrency).filter((taskId) => !results.has(taskId));
+      if (chunk.length === 0) continue;
       const chunkResults = await Promise.all(chunk.map(async (taskId): Promise<TaskExecutionResult> => {
         const planned = plannedById.get(taskId)!;
         const task = taskById.get(taskId)!;
@@ -129,10 +238,12 @@ export async function executeWorkflow(
         const input = skill.inputSchema.safeParse(task.input);
         if (!input.success) {
           const error = `Input validation failed: ${input.error.message}`;
+          await persistTask(taskId,(current) => ({...current,status:"failed",error,output:undefined,updatedAt:Date.now()}));
           emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt:1,error});
           return {taskId,skillId:planned.skillId,status:"failed",error};
         }
         const dependencies = Object.fromEntries(task.dependsOn.map((id) => [id, outputs[id]]));
+        await persistTask(taskId,(current) => ({...current,status:"running",error:undefined,output:undefined,updatedAt:Date.now()}));
         const startedAt = Date.now();
         const firstDeadlineAt = taskTimeoutMs === undefined ? undefined : startedAt + taskTimeoutMs;
         let attempt = 1;
@@ -165,15 +276,18 @@ export async function executeWorkflow(
           }
           const output = skill.outputSchema.safeParse(rawOutput);
           if (!output.success) throw new Error(`Output validation failed: ${output.error.message}`);
+          await persistTask(taskId,(current) => ({...current,status:"completed",output:output.data,error:undefined,updatedAt:Date.now()}));
           outputs[taskId] = output.data;
           emit(options, {type:"task.completed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt});
           return {taskId,skillId:planned.skillId,status:"completed",output:output.data};
         } catch (error) {
           const message = messageOf(error);
           if (options.signal?.aborted) {
+            await persistTask(taskId,(current) => ({...current,status:"cancelled",error:message,output:undefined,updatedAt:Date.now()}));
             emit(options, {type:"task.cancelled",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),reason:message});
             return {taskId,skillId:planned.skillId,status:"cancelled",reason:message};
           }
+          await persistTask(taskId,(current) => ({...current,status:"failed",error:message,output:undefined,updatedAt:Date.now()}));
           emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,error:message});
           return {taskId,skillId:planned.skillId,status:"failed",error:message};
         }
@@ -199,6 +313,9 @@ export async function executeWorkflow(
     const taskResult: TaskExecutionResult = cancelled
       ? {taskId:planned.taskId,skillId:planned.skillId,status:"cancelled",reason}
       : {taskId:planned.taskId,skillId:planned.skillId,status:"skipped",reason};
+    await persistTask(planned.taskId,(current) => ({
+      ...current,status:cancelled ? "cancelled" : "skipped",error:reason,output:undefined,updatedAt:Date.now(),
+    }));
     results.set(planned.taskId, taskResult);
     emit(options, cancelled
       ? {type:"task.cancelled",workflowId:definition.id,taskId:planned.taskId,skillId:planned.skillId,at:Date.now(),reason}
