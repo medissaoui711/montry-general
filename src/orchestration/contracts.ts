@@ -36,6 +36,8 @@ export type SkillExecutionContext = {
   signal: AbortSignal;
   /** Unix epoch milliseconds; absent when no task timeout is configured. */
   deadlineAt?: number;
+  /** Stable per run/task key for provider-side idempotency; present when checkpointing is enabled. */
+  idempotencyKey?: string;
 };
 export type SkillDefinition<I extends z.ZodTypeAny = z.ZodTypeAny, O extends z.ZodTypeAny = z.ZodTypeAny> = {
   id: z.infer<typeof SkillIdSchema>;
