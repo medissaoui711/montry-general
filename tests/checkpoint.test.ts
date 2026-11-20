@@ -38,7 +38,6 @@ describe("workflow checkpoints",()=>{
       await expect(secondStore.save(checkpoint)).rejects.toThrow(/revision must increase/i);
       await secondStore.save({...checkpoint,revision:2});
       expect((await firstStore.load("run-1"))?.revision).toBe(2);
-      await rm(path.join(directory,"*"),{force:true}).catch(()=>undefined);
       await Promise.all([
         firstStore.save({...checkpoint,revision:3}),
         secondStore.save({...checkpoint,revision:4}),
