@@ -34,6 +34,11 @@ export const WorkflowCheckpointSchema = z.object({
 export type WorkflowCheckpointTask = z.infer<typeof WorkflowCheckpointTaskSchema>;
 export type WorkflowCheckpoint = z.infer<typeof WorkflowCheckpointSchema>;
 
+/** Stable across retries and resumes of the same run/task; suitable for provider deduplication. */
+export function workflowTaskIdempotencyKey(runId: string, workflowFingerprint: string, taskId: string): string {
+  return createHash("sha256").update([runId,workflowFingerprint,taskId].join("\\0")).digest("hex");
+}
+
 /**
  * A store must atomically replace one run checkpoint per save. Implementations shared
  * across processes should provide transactional writes; callers must not assume
