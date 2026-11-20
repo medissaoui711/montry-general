@@ -1,5 +1,8 @@
+import {mkdtemp, rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import path from "node:path";
 import {describe,expect,it} from "vitest";
-import {InMemoryWorkflowRunStore,WorkflowCheckpointSchema,fingerprintWorkflow} from "../src/orchestration/checkpoint";
+import {FileWorkflowRunStore,InMemoryWorkflowRunStore,WorkflowCheckpointSchema,fingerprintWorkflow} from "../src/orchestration/checkpoint";
 
 const checkpoint = {
   schemaVersion:1 as const,runId:"run-1",workflowId:"demo",workflowFingerprint:"a".repeat(64),
@@ -23,6 +26,32 @@ describe("workflow checkpoints",()=>{
     await store.save({...checkpoint,revision:2});
     expect((await store.load("run-1"))!.revision).toBe(2);
   });
+
+  it("persists checkpoints atomically across store instances and enforces revisions",async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoints-"));
+    try {
+      const firstStore=new FileWorkflowRunStore(directory);
+      await firstStore.save(checkpoint);
+      const secondStore=new FileWorkflowRunStore(directory);
+      expect(await secondStore.load("run-1")).toEqual(checkpoint);
+      await expect(secondStore.save(checkpoint)).rejects.toThrow(/revision must increase/i);
+      await secondStore.save({...checkpoint,revision:2});
+      expect((await firstStore.load("run-1"))?.revision).toBe(2);
+    } finally {
+      await rm(directory,{recursive:true,force:true});
+    }
+  });
+
+  it("does not allow run IDs to escape the checkpoint directory",async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoints-"));
+    try {
+      const store=new FileWorkflowRunStore(directory);
+      await expect(store.load("../outside")).rejects.toThrow();
+    } finally {
+      await rm(directory,{recursive:true,force:true});
+    }
+  });
+
   it("fingerprints object keys independent of insertion order and changes with workflow inputs",()=>{
     const first: {id:string;tasks:{id:string;skill:string;input:Record<string,unknown>;dependsOn:string[]}[]}={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{b:2,a:1},dependsOn:[]}]};
     const reordered: typeof first={id:"demo",tasks:[{id:"a",skill:"demo.skill",input:{a:1,b:2},dependsOn:[]}]};
