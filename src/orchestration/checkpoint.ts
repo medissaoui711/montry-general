@@ -1,4 +1,6 @@
-import {createHash} from "node:crypto";
+import {createHash, randomUUID} from "node:crypto";
+import {mkdir, open, readFile, rename, rm} from "node:fs/promises";
+import path from "node:path";
 import {z} from "zod";
 import type {WorkflowDefinition} from "./contracts";
 
@@ -73,5 +75,70 @@ export class InMemoryWorkflowRunStore implements WorkflowRunStore {
       throw new Error(`Checkpoint revision must increase for run "${parsed.runId}".`);
     }
     this.checkpoints.set(parsed.runId, structuredClone(parsed));
+  }
+}
+
+
+/**
+ * Durable local-disk adapter. Writes use a same-directory temporary file and atomic
+ * rename. It serializes writes within this instance; do not share a directory between
+ * multiple processes without an external lock/CAS coordinator.
+ */
+export class FileWorkflowRunStore implements WorkflowRunStore {
+  private readonly writeQueues = new Map<string, Promise<void>>();
+
+  constructor(private readonly directory: string) {
+    if (!directory.trim()) throw new Error("Checkpoint directory must not be empty.");
+  }
+
+  private filePath(runId: string): string {
+    const normalized = z.string().trim().min(1).parse(runId);
+    const key = createHash("sha256").update(normalized).digest("hex");
+    return path.join(this.directory, `${key}.json`);
+  }
+
+  async load(runId: string): Promise<WorkflowCheckpoint | null> {
+    const file = this.filePath(runId);
+    try {
+      const raw = await readFile(file, "utf8");
+      const checkpoint = WorkflowCheckpointSchema.parse(JSON.parse(raw));
+      if (checkpoint.runId !== runId) throw new Error("Checkpoint runId does not match its storage key.");
+      return checkpoint;
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  async save(value: WorkflowCheckpoint): Promise<void> {
+    const checkpoint = WorkflowCheckpointSchema.parse(value);
+    const previous = this.writeQueues.get(checkpoint.runId) ?? Promise.resolve();
+    const next = previous.then(async () => {
+      await mkdir(this.directory, {recursive:true,mode:0o700});
+      const current = await this.load(checkpoint.runId);
+      if (current && checkpoint.revision <= current.revision) {
+        throw new Error(`Checkpoint revision must increase for run "${checkpoint.runId}".`);
+      }
+      const destination = this.filePath(checkpoint.runId);
+      const temporary = path.join(this.directory, `.${path.basename(destination)}.${randomUUID()}.tmp`);
+      let handle: Awaited<ReturnType<typeof open>> | undefined;
+      try {
+        handle = await open(temporary, "wx", 0o600);
+        await handle.writeFile(JSON.stringify(checkpoint), "utf8");
+        await handle.sync();
+        await handle.close();
+        handle = undefined;
+        await rename(temporary, destination);
+      } finally {
+        if (handle) await handle.close();
+        await rm(temporary, {force:true});
+      }
+    });
+    this.writeQueues.set(checkpoint.runId, next);
+    try {
+      await next;
+    } finally {
+      if (this.writeQueues.get(checkpoint.runId) === next) this.writeQueues.delete(checkpoint.runId);
+    }
   }
 }
