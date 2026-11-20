@@ -5,7 +5,7 @@ import type {WorkflowDefinition} from "./contracts";
 export const WorkflowCheckpointTaskSchema = z.object({
   taskId: z.string().min(1),
   skillId: z.string().min(1),
-  skillVersion: z.string().regex(/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/),
+  skillVersion: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/),
   status: z.enum(["pending", "running", "completed", "failed", "skipped", "cancelled", "indeterminate"]),
   output: z.unknown().optional(),
   error: z.string().optional(),
