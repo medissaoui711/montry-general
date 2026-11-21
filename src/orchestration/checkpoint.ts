@@ -14,8 +14,8 @@ export const WorkflowCheckpointTaskSchema = z.object({
   if (task.status === "completed" && !("output" in task)) {
     context.addIssue({code:z.ZodIssueCode.custom,path:["output"],message:"Completed checkpoint tasks must include output."});
   }
-  if (task.status === "failed" && !task.error) {
-    context.addIssue({code:z.ZodIssueCode.custom,path:["error"],message:"Failed checkpoint tasks must include an error."});
+  if ((task.status === "failed" || task.status === "indeterminate") && !task.error) {
+    context.addIssue({code:z.ZodIssueCode.custom,path:["error"],message:"Failed and indeterminate checkpoint tasks must include an error or reconciliation reason."});
   }
 });
 
