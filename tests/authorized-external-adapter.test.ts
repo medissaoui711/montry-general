@@ -34,7 +34,7 @@ describe("policy-enforced external adapter",() => {
     const execute=vi.fn();
     await expect(executeAuthorizedExternalSkill({
       adapter:{providerId:"provider.demo",providerVersion:"1.0.0",sourceRevision:"abc123",execute},
-      descriptor,skill,input:{},context,policy:{...policy,allowedProviders:[]},
+      descriptor,skill,input:{},context,policy:{...policy,allowedProviders:["provider.other"]},
       principalId:"operator-1",environment:"test",
     })).rejects.toBeInstanceOf(ExternalExecutionDeniedError);
     expect(execute).not.toHaveBeenCalled();
