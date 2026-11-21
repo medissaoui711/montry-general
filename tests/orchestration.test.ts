@@ -191,6 +191,31 @@ describe("workflow runtime",()=>{
       .rejects.toThrow(/not declared retrySafe/i);
   });
 
+  it("converts abandoned running checkpoints to indeterminate even when retrySafe is true", async () => {
+    const store = new InMemoryWorkflowRunStore();
+    const execute = vi.fn(() => ({ok:true}));
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.crashed",version:"1.0.0",retrySafe:true,
+      inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    const definition: WorkflowDefinition = {id:"abandoned-running-check",tasks:[
+      {id:"task",skill:"checkpoint.crashed",input:{},dependsOn:[]},
+    ]};
+    await store.save({
+      schemaVersion:1,runId:"abandoned-running-1",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"checkpoint.crashed",skillVersion:"1.0.0",status:"running",updatedAt:Date.now()}],
+      updatedAt:Date.now(),
+    });
+    await expect(executeWorkflow(definition,registry,{
+      runId:"abandoned-running-1",checkpointStore:store,resume:true,
+    })).rejects.toThrow(/converted to indeterminate/i);
+    expect((await store.load("abandoned-running-1"))?.tasks[0]).toMatchObject({
+      status:"indeterminate",error:expect.stringContaining("Previous process ended"),
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("never replays an indeterminate checkpoint, even when retrySafe is true", async () => {
     const store = new InMemoryWorkflowRunStore();
     const execute = vi.fn(() => ({ok:true}));
