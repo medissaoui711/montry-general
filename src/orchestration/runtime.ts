@@ -197,7 +197,8 @@ export async function executeWorkflow(
             ...(task.status === "completed" ? {} : {status:"pending" as const,error:undefined,output:undefined,updatedAt:now}),
           })),
         };
-        await store.save(checkpoint);
+        const swapped = await store.compareAndSwap(options.runId,loaded.revision,checkpoint);
+        if (!swapped) throw new Error("Checkpoint changed during resume normalization; reload before continuing.");
       }
     } else {
       if (await store.load(options.runId)) {
@@ -214,7 +215,8 @@ export async function executeWorkflow(
         })),
         updatedAt:now,
       };
-      await store.save(checkpoint);
+      const created = await store.compareAndSwap(options.runId,null,checkpoint);
+      if (!created) throw new Error(`Checkpoint already exists for run "${options.runId}"; set resume:true to restore it.`);
     }
   }
 
@@ -233,7 +235,8 @@ export async function executeWorkflow(
         updatedAt:Date.now(),
         tasks:checkpoint!.tasks.map((task) => task.taskId === taskId ? nextTask : task),
       };
-      await options.checkpointStore!.save(next);
+      const swapped = await options.checkpointStore!.compareAndSwap(options.runId!,checkpoint!.revision,next);
+      if (!swapped) throw new Error(`Checkpoint revision conflict while persisting task "${taskId}".`);
       checkpoint = next;
     });
     await writeQueue;
