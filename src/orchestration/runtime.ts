@@ -164,6 +164,9 @@ export async function executeWorkflow(
         } else if (saved.status === "pending" || saved.status === "skipped") {
           if (saved.status === "skipped") normalized = true;
         } else {
+          if (saved.status === "indeterminate") {
+            throw new Error(`Task "${planned.taskId}" has an indeterminate external outcome; reconciliation is required before resume and retrySafe cannot authorize replay.`);
+          }
           if (skill.retrySafe !== true) {
             throw new Error(`Task "${planned.taskId}" has checkpoint status "${saved.status}" and is not declared retrySafe; refusing possible duplicate side effects.`);
           }
