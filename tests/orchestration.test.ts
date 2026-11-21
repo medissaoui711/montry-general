@@ -278,8 +278,9 @@ describe("workflow runtime",()=>{
     await started;
     controller.abort("operator requested cancellation");
     const result = await running;
-    expect(result.status).toBe("cancelled");
-    expect(result.tasks.map((task) => task.status)).toEqual(["cancelled","cancelled"]);
+    expect(result.status).toBe("indeterminate");
+    expect(result.tasks.map((task) => task.status)).toEqual(["indeterminate","cancelled"]);
+    expect(result.tasks[0]).toMatchObject({status:"indeterminate",reconciliationRequired:true});
     expect(second).not.toHaveBeenCalled();
   });
 
