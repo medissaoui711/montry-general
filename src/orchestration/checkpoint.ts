@@ -26,6 +26,13 @@ export const WorkflowCheckpointTaskSchema = z.object({
   if ((task.status === "failed" || task.status === "indeterminate") && !task.error) {
     context.addIssue({code:z.ZodIssueCode.custom,path:["error"],message:"Failed and indeterminate checkpoint tasks must include an error or reconciliation reason."});
   }
+  if (task.reconciliation) {
+    const expectedStatus = task.reconciliation.resolution === "completed" ? "completed"
+      : task.reconciliation.resolution === "failed" ? "failed" : "pending";
+    if (task.status !== expectedStatus) {
+      context.addIssue({code:z.ZodIssueCode.custom,path:["reconciliation"],message:"Reconciliation resolution does not match checkpoint task status."});
+    }
+  }
 });
 
 export const WorkflowCheckpointSchema = z.object({
@@ -85,6 +92,9 @@ export async function reconcileWorkflowTask(
     output:z.unknown().optional(),
     reason:z.string().trim().min(1).max(2000).optional(),
   }).strict().parse(input);
+  if (request.resolution === "completed" && !Object.prototype.hasOwnProperty.call(input,"output")) {
+    throw new Error("An output is required when reconciling a task as completed.");
+  }
   const current = await store.load(request.runId);
   if (!current) throw new Error(`No checkpoint exists for run "${request.runId}".`);
   const parsed = WorkflowCheckpointSchema.parse(current);
