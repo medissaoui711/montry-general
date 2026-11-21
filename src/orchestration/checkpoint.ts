@@ -156,6 +156,8 @@ export type FileWorkflowRunStoreOptions = {
   lockWaitMs?: number;
   /** Locks older than this are treated as abandoned; defaults to 60000ms. */
   staleLockMs?: number;
+  /** Maximum serialized checkpoint size; defaults to 10 MiB. */
+  maxCheckpointBytes?: number;
 };
 
 /**
@@ -166,12 +168,17 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
   private readonly directory: string;
   private readonly lockWaitMs: number;
   private readonly staleLockMs: number;
+  private readonly maxCheckpointBytes: number;
 
   constructor(directory: string, options: FileWorkflowRunStoreOptions = {}) {
     if (!directory.trim()) throw new Error("Checkpoint directory must be a non-empty path.");
     this.directory = path.resolve(directory);
     this.lockWaitMs = options.lockWaitMs ?? 10_000;
     this.staleLockMs = options.staleLockMs ?? 60_000;
+    this.maxCheckpointBytes = options.maxCheckpointBytes ?? 10 * 1024 * 1024;
+    if (!Number.isInteger(this.maxCheckpointBytes) || this.maxCheckpointBytes < 1024 || this.maxCheckpointBytes > 100 * 1024 * 1024) {
+      throw new Error("maxCheckpointBytes must be an integer between 1024 and 104857600.");
+    }
     if (!Number.isInteger(this.lockWaitMs) || this.lockWaitMs < 1 || this.lockWaitMs > 120_000) {
       throw new Error("lockWaitMs must be an integer between 1 and 120000.");
     }
@@ -190,7 +197,11 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
 
   private async readUnlocked(runId: string): Promise<WorkflowCheckpoint | null> {
     try {
-      const raw = await readFile(this.filePath(runId),"utf8");
+      const file = this.filePath(runId);
+      const info = await stat(file);
+      if (info.size > this.maxCheckpointBytes) throw new Error("Checkpoint file exceeds maxCheckpointBytes.");
+      const raw = await readFile(file,"utf8");
+      if (Buffer.byteLength(raw,"utf8") > this.maxCheckpointBytes) throw new Error("Checkpoint file exceeds maxCheckpointBytes.");
       return WorkflowCheckpointSchema.parse(JSON.parse(raw));
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
@@ -242,6 +253,7 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
     const parsed = WorkflowCheckpointSchema.parse(checkpoint);
     const serialized = JSON.stringify(parsed);
     if (serialized === undefined) throw new Error("Checkpoint cannot be serialized as JSON.");
+    if (Buffer.byteLength(serialized,"utf8") > this.maxCheckpointBytes) throw new Error("Checkpoint exceeds maxCheckpointBytes.");
     // Verify JSON round-trip before replacing the previous durable snapshot.
     WorkflowCheckpointSchema.parse(JSON.parse(serialized));
     const target = this.filePath(parsed.runId);
