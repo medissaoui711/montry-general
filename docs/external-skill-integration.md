@@ -81,7 +81,7 @@ External Skill or Service
 
 Cross-cutting controls apply to the adapter boundary: identity and version pinning, schema validation, secret handling, timeout/cancellation, output limits, audit events, cost accounting, revocation and health monitoring.
 
-The Policy & Approval Gate and generic MCP Client/Gateway shown above are **target components**, not verified current components.
+The Policy & Approval Gate and generic MCP Client/Gateway shown above are **target components**. A pure deny-by-default external execution policy evaluator now exists in `src/orchestration/policy.ts`; it evaluates allowlists, exact approval scope/expiry and pre-reserved metered/paid budgets. It is not yet wired as a mandatory dispatch gate around every external adapter invocation. Principal authentication, approval provenance, durable budget reservation/reconciliation and audit persistence remain host responsibilities and are not supplied by this evaluator.
 
 ## 5. External skill lifecycle
 
@@ -177,9 +177,7 @@ remote cancellation. An explicit completed provider response remains a completed
 outcome even if local cancellation occurred while awaiting it.
 
 The descriptor's schema-version labels are not yet bound to independently versioned
-schema artifacts. The contract does not provide generic payload bounds, provider
-discovery, transport, authorization, approval enforcement, cost reservation, durable
-idempotency/deduplication, durable audit storage, or a concrete MCP/CLI/HTTP adapter.
+schema artifacts. The contract does not provide generic payload bounds, provider discovery, transport, or durable idempotency/deduplication or audit storage. The separate policy evaluator provides a pure decision function, but is not yet a mandatory adapter dispatch gate and does not authenticate principals, verify approval provenance, reserve funds, or persist budget/audit records. No concrete general MCP/CLI/HTTP adapter is included.
 A required idempotency key is a provider request input, not proof of deduplication.
 `sideEffect` and `costClass` are descriptive classifications, not enforcement.
 
