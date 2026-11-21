@@ -97,6 +97,20 @@ describe("workflow checkpoints",()=>{
       actorId:"operator:qa",evidence:"Provider confirms completion.",
     } as never,async () => true)).rejects.toThrow(/output is required/i);
   });
+  it("enforces configured file checkpoint size bounds",async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoint-bounds-"));
+    try {
+      const store=new FileWorkflowRunStore(directory,{maxCheckpointBytes:1024});
+      const oversized={
+        ...checkpoint,runId:"oversized-run",revision:0,
+        tasks:[{...checkpoint.tasks[0]!,output:{payload:"x".repeat(2048)}}],
+      };
+      await expect(store.compareAndSwap("oversized-run",null,oversized)).rejects.toThrow(/maxCheckpointBytes/i);
+      expect(await store.load("oversized-run")).toBeNull();
+    } finally {
+      await rm(directory,{recursive:true,force:true});
+    }
+  });
   it("persists file checkpoints across instances and rejects stale concurrent writes",async()=>{
     const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoint-"));
     try {
