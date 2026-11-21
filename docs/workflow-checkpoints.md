@@ -59,8 +59,9 @@ does not show completion.
 Checkpoint schema version 1 supports task states: `pending`, `running`,
 `completed`, `failed`, `skipped`, `cancelled` and `indeterminate`.
 Indeterminate tasks require an explanation and can be resolved only through the
-explicit `reconcileWorkflowTask` API. A reconciliation record stores the actor,
-evidence, resolution and timestamp. Supported resolutions are:
+explicit `reconcileWorkflowTask` API. The API requires a host-supplied authorization
+callback; it does not authenticate identities itself. A reconciliation record stores
+the actor, evidence, resolution and timestamp. Supported resolutions are:
 - `completed`: provider evidence confirms completion; output is validated against the
   registered skill output schema.
 - `failed`: evidence confirms a terminal failure/no further action is appropriate.
