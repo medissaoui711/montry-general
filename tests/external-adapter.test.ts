@@ -97,6 +97,18 @@ describe("external adapter contract", () => {
     expect(result).toMatchObject({status: "indeterminate", reconciliationRequired: true});
   });
 
+  it("requires a provider idempotency key before dispatch when declared", async () => {
+    const execute = vi.fn(async () => ({status: "completed", output: {items: []}}));
+    const requiresKey = {...descriptor, idempotency: "provider-key" as const};
+    await expect(executeExternalSkill(adapter(execute), requiresKey, skill, {query: "x"}, context))
+      .rejects.toThrow(/idempotency key/i);
+    expect(execute).not.toHaveBeenCalled();
+    await expect(executeExternalSkill(adapter(execute), requiresKey, skill, {query: "x"}, {
+      ...context, idempotencyKey: "run-1:task-1",
+    })).resolves.toMatchObject({status: "completed"});
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it("rejects malformed result envelopes", async () => {
     const execute = vi.fn(async () => ({status: "completed", output: {items: []}, unexpected: true}));
     await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context)).rejects.toThrow();
