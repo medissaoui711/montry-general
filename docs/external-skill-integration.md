@@ -401,7 +401,7 @@ A passing unit test suite does not prove provider behavior, production security,
 |---|---|---|---|
 | A — Standard correction | Publish this standard as a draft; reconcile current documentation claims | Independent review accepts document and baseline evidence | Documentation published; independent review pending |
 | B — Adapter contract | Define concrete typed contracts and adapter test harness | Contract tests pass; no provider-specific code in core | ADR-001 accepted with limitations; focused exception handling added. Latest CI for the resulting commits pending; no production certification |
-| C — MCP foundation | Implement an allowlisted MCP client/session adapter | Protocol, identity, timeout, cancellation and security tests pass | Not started; blocked pending Phase B review/acceptance |
+| C — MCP foundation | Design and implement an allowlisted MCP client/session adapter | Runtime indeterminate outcomes, reconciliation, protocol identity, bounds, policy and security tests pass | ADR-002 proposed; implementation NO-GO. Runtime currently records timeout/cancel races as failed/cancelled while provider work may continue |
 | D — Policy and governance | Implement approval, data scope, cost reservation, audit and revocation controls | Deny-by-default and budget tests pass | Not started |
 | E — New-Term Radar pilot | Integrate only verified, approved capabilities | Source/license/security/cost evidence and pilot acceptance complete | Not started; candidate only |
 
@@ -428,7 +428,7 @@ Do not activate an external skill if any of the following applies:
 The owner is the final authority for strategic and operational approval, risk limits, budgets and activation of external capabilities. Montry orchestration and specialist assessments may recommend actions but do not independently authorize high-impact or paid execution.
 
 **Current document status:** DRAFT — PENDING INDEPENDENT REVIEW.  
-**External adapter decision:** ADR-001 accepted with limitations for the narrow typed boundary; not a production certification.\n**Current MCP status:** no general MCP adapter verified; Phase C remains NO-GO pending its own design and controls.  
+**External adapter decision:** ADR-001 accepted with limitations for the narrow typed boundary; not a production certification.\n**Current MCP status:** no general MCP adapter verified. ADR-002 records a proposed design; implementation and provider activation remain NO-GO. The current runtime can mark a timed-out/cancelled task failed/cancelled while provider work may continue, so first-class indeterminate task state and reconciliation are prerequisites.  
 **Current New-Term Radar status:** candidate only; no integration or pricing claim established.  
 **Current durable persistence status:** pluggable store and runtime resume support exist; no durable production backend is included.
 
@@ -437,7 +437,7 @@ The owner is the final authority for strategic and operational approval, risk li
 The following ADRs SHOULD be created and decided as implementation proceeds:
 
 - **ADR-001:** external adapter and capability contract;
-- **ADR-002:** MCP client/session lifecycle and server identity;
+- **ADR-002:** MCP client/session lifecycle and server identity — proposed, not approved; implementation NO-GO;
 - **ADR-003:** CLI process isolation and executable trust;
 - **ADR-004:** policy evaluation, approvals and delegated authority;
 - **ADR-005:** cost classification, budget reservation and reconciliation;
