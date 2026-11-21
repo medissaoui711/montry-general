@@ -10,11 +10,13 @@
 
 The repository currently recognizes `mcp` as a manifest execution-kind value, but no general MCP client/session adapter was found in the inspected source. Manifests are metadata-only and trusted host code supplies implementations. The existing external adapter contract is a typed boundary, not a transport implementation or policy engine.
 
-The generic workflow runtime races task execution against cancellation and task timeout. When the race rejects, the provider promise may continue running. The checkpoint schema already includes an `indeterminate` status, but the public `TaskExecutionResult` union does not expose it and the timeout/cancellation race currently records failed/cancelled. The resume path also previously allowed an `indeterminate` checkpoint to be reset to pending when a skill was marked `retrySafe`.
+The workflow runtime now exposes `indeterminate` at task and workflow level when timeout or cancellation wins after skill invocation begins. It persists that state when a checkpoint store is configured and emits `task.indeterminate`. Cancellation before invocation begins remains `cancelled`. The provider promise may continue in the background if it ignores AbortSignal; the runtime reports uncertainty rather than claiming remote cancellation.
 
-The resume path has now been hardened on `main`: indeterminate checkpoints are always blocked pending reconciliation, regardless of `retrySafe`, and the checkpoint schema requires a reconciliation reason. Focused regression tests were added. This closes the unsafe replay path but does not yet provide first-class runtime indeterminate results or an operator reconciliation workflow.
+Indeterminate checkpoints cannot be resumed automatically, even when `retrySafe` is true. The new `reconcileWorkflowTask` operation supports evidence-backed resolutions to completed (output schema validated), failed, or retry-authorized (operator asserts authoritative evidence confirms no effect). Each reconciliation records actor, evidence, resolution and timestamp, and uses checkpoint revision compare-and-swap to reject stale concurrent decisions. Runtime writes also use compare-and-swap.
 
-**Blocking finding:** An MCP adapter must not be connected to the current runtime for mutating or otherwise non-replay-safe operations until timeout/cancellation outcomes can be persisted and surfaced as indeterminate, with a reconciliation path that can resolve them without replay.
+The included `InMemoryWorkflowRunStore` remains process-local and non-durable. A production store must implement transactional compare-and-swap; the repository does not yet ship such a backend or an authenticated operator UI/API. The runtime marks interrupted calls indeterminate but cannot prove whether a remote operation was dispatched or stopped.
+
+**Remaining blocking findings:** MCP must remain NO-GO until a durable production checkpoint/reconciliation backend and authenticated operator boundary are provided, and the MCP transport, identity pinning, tool allowlist, policy, payload bounds, secret controls and audit lifecycle are implemented and tested.
 
 ## Proposed architecture
 
@@ -83,8 +85,8 @@ A server kill switch must block new dispatches immediately. Revocation must prev
 
 | Gate | Required work | Evidence required |
 |---|---|---|
-| Runtime outcomes | Add first-class indeterminate task result and checkpoint state for timeout/cancel after invocation | Unit tests proving persistence and no automatic replay |
-| Reconciliation | Define operator/provider reconciliation contract and state transitions | Tests for resolved, unresolved and rejected reconciliation |
+| Runtime outcomes | <strike>Add first-class indeterminate task result and checkpoint state for timeout/cancel after invocation</strike> Implemented in the in-process runtime; durable backend remains external | CI tests proving result status, event emission, checkpoint persistence and no automatic replay |
+| Reconciliation | <strike>Define evidence-backed reconciliation states and revision-checked transitions</strike> Implemented as a library API; authenticated operator workflow and durable audit remain external | CI tests for completed/failed/retry-authorized transitions, output validation and stale revision rejection |
 | MCP transport | Implement one explicitly selected transport first; no dynamic transport selection | Protocol conformance tests and identity verification |
 | Tool allowlist | Host-owned exact tool allowlist and stable bindings | Unknown/new tool denied tests |
 | Bounds | Enforce request/result bytes, depth, counts, string lengths and execution limits | Boundary and oversized payload tests |
