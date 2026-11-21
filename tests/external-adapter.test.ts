@@ -122,6 +122,22 @@ describe("external adapter contract", () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
+  it("converts adapter exceptions into conservative indeterminate outcomes", async () => {
+    const execute = vi.fn(async () => { throw new Error("provider response may contain sensitive details"); });
+    const result = await executeExternalSkill(adapter(execute), {
+      ...descriptor, sideEffect: "remote-write",
+    }, skill, {query: "x"}, context);
+    expect(result).toEqual({
+      status: "indeterminate",
+      reason: "Adapter execution ended without a confirmed result.",
+      dispatchOccurred: true,
+      sideEffectPossible: true,
+      reconciliationRequired: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("sensitive details");
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
   it("rejects malformed result envelopes", async () => {
     const execute = vi.fn(async () => ({status: "completed", output: {items: []}, unexpected: true}));
     await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context)).rejects.toThrow();
