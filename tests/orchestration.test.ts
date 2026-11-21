@@ -257,6 +257,21 @@ describe("workflow runtime",()=>{
     expect(result.tasks.map((t)=>t.status)).toEqual(["failed","skipped"]);
     expect(second).not.toHaveBeenCalled();
   });
+  it("keeps cancellation before skill invocation as cancelled, not indeterminate", async () => {
+    const controller = new AbortController();
+    controller.abort("cancelled before dispatch");
+    const execute = vi.fn(() => ({ok:true}));
+    const skills = new SkillRegistry().register({
+      id:"cancel.before",version:"1.0.0",inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    const result = await executeWorkflow({id:"cancel-before-invoke",tasks:[
+      {id:"task",skill:"cancel.before",input:{},dependsOn:[]},
+    ]},skills,{signal:controller.signal});
+    expect(result.status).toBe("cancelled");
+    expect(result.tasks[0]).toMatchObject({status:"cancelled"});
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("cancels an active task and does not schedule later tasks", async () => {
     const controller = new AbortController();
     let markStarted!: () => void;
