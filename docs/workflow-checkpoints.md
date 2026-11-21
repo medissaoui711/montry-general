@@ -10,9 +10,12 @@ a SHA-256 fingerprint of the workflow definition.
 
 - `load(runId)` returns a validated checkpoint or `null`.
 - `save(checkpoint)` atomically replaces the checkpoint for that run.
-- Revisions must increase monotonically. The in-memory adapter enforces this rule.
-- Persistent adapters shared by multiple workers must implement transactional or
-  compare-and-swap writes; a process-local mutex is not sufficient.
+- `compareAndSwap(runId, expectedRevision, checkpoint)` provides atomic create-if-absent
+  (`expectedRevision: null`) and revision-checked updates.
+- Reconciliation writes use compare-and-swap so stale operator decisions cannot overwrite
+  newer runtime state.
+- Persistent adapters MUST implement these operations transactionally across workers;
+  a process-local mutex is not sufficient.
 
 `InMemoryWorkflowRunStore` is intended for tests and single-process use only. It
 does not survive process restarts and is not a production durable backend. No
