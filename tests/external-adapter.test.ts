@@ -126,4 +126,58 @@ describe("external adapter contract", () => {
     const execute = vi.fn(async () => ({status: "completed", output: {items: []}, unexpected: true}));
     await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context)).rejects.toThrow();
   });
+
+  it("accepts a confirmed failure with no dispatch and no possible side effect", async () => {
+    const execute = vi.fn(async () => ({
+      status: "failed", errorCode: "input_rejected",
+      message: "Provider rejected the request before dispatch.",
+      dispatchOccurred: false, sideEffectPossible: false,
+    }));
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context))
+      .resolves.toMatchObject({status: "failed", dispatchOccurred: false, sideEffectPossible: false});
+  });
+
+  it("rejects a failed outcome that claims a side effect without dispatch", async () => {
+    const execute = vi.fn(async () => ({
+      status: "failed", errorCode: "transport_error",
+      message: "Invalid contradictory outcome.",
+      dispatchOccurred: false, sideEffectPossible: true,
+    }));
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context))
+      .rejects.toThrow(/possible side effect/i);
+  });
+
+  it("accepts a dispatched failure while preserving side-effect uncertainty", async () => {
+    const execute = vi.fn(async () => ({
+      status: "failed", errorCode: "provider_error",
+      message: "Provider returned an error after dispatch.",
+      dispatchOccurred: true, sideEffectPossible: true,
+    }));
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context))
+      .resolves.toMatchObject({status: "failed", dispatchOccurred: true, sideEffectPossible: true});
+  });
+
+  it("rejects an indeterminate outcome that omits required reconciliation", async () => {
+    const execute = vi.fn(async () => ({
+      status: "indeterminate", reason: "Connection lost after dispatch.",
+      dispatchOccurred: true, sideEffectPossible: true, reconciliationRequired: false,
+    }));
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, context))
+      .rejects.toThrow(/reconciliation/i);
+  });
+
+  it("rejects duplicate capabilities and provider identity drift before dispatch", async () => {
+    const execute = vi.fn(async () => ({status: "completed", output: {items: []}}));
+    await expect(executeExternalSkill(adapter(execute), {
+      ...descriptor, capabilities: ["records.read", "records.read"],
+    }, skill, {query: "x"}, context)).rejects.toThrow(/unique/i);
+    await expect(executeExternalSkill({
+      ...adapter(execute), providerVersion: "9.9.9",
+    }, descriptor, skill, {query: "x"}, context)).rejects.toThrow(/identity/i);
+    await expect(executeExternalSkill({
+      ...adapter(execute), providerId: "provider.other",
+    }, descriptor, skill, {query: "x"}, context)).rejects.toThrow(/identity/i);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
 });
