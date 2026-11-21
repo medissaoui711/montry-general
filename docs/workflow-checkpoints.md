@@ -35,8 +35,8 @@ are provided together:
   selected skill IDs and versions before restoring completed outputs.
 - Completed outputs are validated again against the currently registered output schema.
 
-This is runtime support against a caller-provided store, not a claim that Montry
-ships a durable production persistence backend. See
+The package ships both in-memory and single-host file-backed stores, but does not
+ship a multi-host database backend. See
 [workflow-checkpoint-resume.md](workflow-checkpoint-resume.md) for the resume
 contract and example.
 
