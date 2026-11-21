@@ -145,7 +145,7 @@ describe("workflow runtime",()=>{
       resolution:"retry-authorized",actorId:"operator:test",
       evidence:"Provider status lookup confirms the first request was not accepted.",
       reason:"Authoritative provider lookup confirmed no side effect occurred.",
-    });
+    },async () => true);
     const resumed = await executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,resume:true});
     expect(resumed.status).toBe("completed");
     expect(first).toHaveBeenCalledTimes(1);
