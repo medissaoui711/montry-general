@@ -1,4 +1,5 @@
 import {describe,expect,it,vi} from "vitest";
+import {z} from "zod";
 import {executeAuthorizedExternalSkill,ExternalExecutionDeniedError} from "../src/orchestration/authorized-external-adapter";
 import type {ExternalExecutionPolicy} from "../src/orchestration/policy";
 
@@ -15,7 +16,7 @@ const policy:ExternalExecutionPolicy = {
 };
 const skill = {
   id:"skill.demo",version:"1.0.0",capabilities:["demo.read"],
-  inputSchema:{parse:(v:unknown)=>v},outputSchema:{parse:(v:unknown)=>v},
+  inputSchema:z.unknown(),outputSchema:z.unknown(),
 };
 const context = {workflowId:"wf-1",runId:"run-1",taskId:"task-1",signal:new AbortController().signal};
 
