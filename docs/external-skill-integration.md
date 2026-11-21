@@ -171,8 +171,12 @@ cancelled or expired execution context is rejected before dispatch.
 This is a contract boundary only. It does not provide provider discovery, transport,
 authorization, approval enforcement, cost reservation, durable idempotency storage,
 or a concrete MCP/CLI/HTTP adapter. Contract tests are in
-`tests/external-adapter.test.ts`; they have been committed but are not claimed
-as passing until executed in CI or a local test environment.
+`tests/external-adapter.test.ts`. CI run
+[44955783932](https://github.com/medissaoui711/montry-general/actions/runs/44955783932)
+on commit `66ce8c34a37894d27c32634a81b12be44d8b032e` passed TypeScript validation,
+all 7 test files (84 tests), and the configured Remotion smoke-render and artifact
+checks. This is repository CI evidence only; it is not an independent security
+review, provider conformance test, or production certification.
 
 ## 7. MCP adapter requirements
 
@@ -381,10 +385,10 @@ A passing unit test suite does not prove provider behavior, production security,
 | Phase | Scope | Exit gate | Status |
 |---|---|---|---|
 | A — Standard correction | Publish this standard as a draft; reconcile current documentation claims | Independent review accepts document and baseline evidence | Documentation published; independent review pending |
-| B — Adapter contract | Define concrete typed contracts and adapter test harness | Contract tests pass; no provider-specific code in core | Initial contract and tests committed; local CI verification pending |
-| C — MCP foundation | Implement an allowlisted MCP client/session adapter | Protocol, identity, timeout, cancellation and security tests pass |
-| D — Policy and governance | Implement approval, data scope, cost reservation, audit and revocation controls | Deny-by-default and budget tests pass |
-| E — New-Term Radar pilot | Integrate only verified, approved capabilities | Source/license/security/cost evidence and pilot acceptance complete |
+| B — Adapter contract | Define concrete typed contracts and adapter test harness | Contract tests pass; no provider-specific code in core | CI verified on `66ce8c3`: typecheck passed; 7 test files and 84 tests passed. Contract remains subject to independent review; no production certification |
+| C — MCP foundation | Implement an allowlisted MCP client/session adapter | Protocol, identity, timeout, cancellation and security tests pass | Not started; blocked pending Phase B review/acceptance |
+| D — Policy and governance | Implement approval, data scope, cost reservation, audit and revocation controls | Deny-by-default and budget tests pass | Not started |
+| E — New-Term Radar pilot | Integrate only verified, approved capabilities | Source/license/security/cost evidence and pilot acceptance complete | Not started; candidate only |
 
 Each phase is gated. Completion of one phase does not automatically authorize the next. Paid or high-impact operations require separate owner approval.
 
