@@ -114,7 +114,7 @@ See [docs/audio-provider-adapters.md](docs/audio-provider-adapters.md). The core
 
 ## Current runtime boundary
 
-The in-process runtime supports health-aware provider resolution, bounded parallel scheduling, cooperative cancellation, per-attempt timeouts, explicit idempotency-gated retries, structured lifecycle events and optional checkpoint/resume when a caller supplies a `WorkflowRunStore`. The repository includes only an in-memory store, not a durable production backend; it does not claim sandbox isolation, remote skill installation or distributed execution. External providers such as Openverse and Earshot remain optional adapters behind explicit skill contracts.
+The in-process runtime supports health-aware provider resolution, bounded parallel scheduling, cooperative cancellation, per-attempt timeouts, explicit idempotency-gated retries, structured lifecycle events and optional checkpoint/resume through a pluggable `WorkflowRunStore`. The repository includes an in-memory store and a durable single-host `FileWorkflowRunStore`; it does not include a multi-host transactional database backend, authenticated operator UI/API, sandbox isolation or remote skill installation. Interrupted or timed-out calls after invocation begins are reported as indeterminate and require evidence-backed reconciliation. The external execution policy evaluator is deny-by-default, but the embedding host remains responsible for authenticating principals, verifying approval provenance and enforcing durable budget reservations before dispatch. External providers such as Openverse and Earshot remain optional adapters behind explicit skill contracts.
 
 ## Quality gates
 
