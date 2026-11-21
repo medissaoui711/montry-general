@@ -1,3 +1,4 @@
+export * from "./authorized-external-adapter";
 export * from "./checkpoint";
 export * from "./contracts";
 export * from "./external-adapter";
