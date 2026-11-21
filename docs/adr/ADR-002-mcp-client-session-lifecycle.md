@@ -10,9 +10,11 @@
 
 The repository currently recognizes `mcp` as a manifest execution-kind value, but no general MCP client/session adapter was found in the inspected source. Manifests are metadata-only and trusted host code supplies implementations. The existing external adapter contract is a typed boundary, not a transport implementation or policy engine.
 
-The generic workflow runtime races task execution against cancellation and task timeout. When the race rejects, the provider promise may continue running. The runtime currently records the task as failed or cancelled rather than exposing a first-class indeterminate task result. A task checkpointed in failed/cancelled/running states is only resumed automatically when the skill is explicitly marked retrySafe; this is not a complete reconciliation model for external effects.
+The generic workflow runtime races task execution against cancellation and task timeout. When the race rejects, the provider promise may continue running. The checkpoint schema already includes an `indeterminate` status, but the public `TaskExecutionResult` union does not expose it and the timeout/cancellation race currently records failed/cancelled. The resume path also previously allowed an `indeterminate` checkpoint to be reset to pending when a skill was marked `retrySafe`.
 
-**Blocking finding:** An MCP adapter must not be connected to the current runtime for mutating or otherwise non-replay-safe operations until timeout/cancellation outcomes can be persisted as indeterminate and blocked from replay pending reconciliation.
+The resume path has now been hardened on `main`: indeterminate checkpoints are always blocked pending reconciliation, regardless of `retrySafe`, and the checkpoint schema requires a reconciliation reason. Focused regression tests were added. This closes the unsafe replay path but does not yet provide first-class runtime indeterminate results or an operator reconciliation workflow.
+
+**Blocking finding:** An MCP adapter must not be connected to the current runtime for mutating or otherwise non-replay-safe operations until timeout/cancellation outcomes can be persisted and surfaced as indeterminate, with a reconciliation path that can resolve them without replay.
 
 ## Proposed architecture
 
