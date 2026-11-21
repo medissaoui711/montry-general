@@ -26,12 +26,11 @@ export const WorkflowCheckpointTaskSchema = z.object({
   if ((task.status === "failed" || task.status === "indeterminate") && !task.error) {
     context.addIssue({code:z.ZodIssueCode.custom,path:["error"],message:"Failed and indeterminate checkpoint tasks must include an error or reconciliation reason."});
   }
-  if (task.reconciliation) {
-    const expectedStatus = task.reconciliation.resolution === "completed" ? "completed"
-      : task.reconciliation.resolution === "failed" ? "failed" : "pending";
-    if (task.status !== expectedStatus) {
-      context.addIssue({code:z.ZodIssueCode.custom,path:["reconciliation"],message:"Reconciliation resolution does not match checkpoint task status."});
-    }
+  if (task.reconciliation?.resolution === "completed" && task.status !== "completed") {
+    context.addIssue({code:z.ZodIssueCode.custom,path:["reconciliation"],message:"A task reconciled as completed must remain completed."});
+  }
+  if (task.reconciliation?.resolution === "failed" && task.status !== "failed") {
+    context.addIssue({code:z.ZodIssueCode.custom,path:["reconciliation"],message:"A task reconciled as failed must remain terminally failed."});
   }
 });
 
