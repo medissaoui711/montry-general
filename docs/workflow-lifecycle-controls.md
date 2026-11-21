@@ -18,8 +18,12 @@ const result = await executeWorkflow(workflow, registry, {
 });
 ```
 
-- `signal` cancels active work and prevents later tasks/chunks from being scheduled. The result status is `cancelled`; affected tasks use the `cancelled` status.
-- `taskTimeoutMs` is an optional per-attempt timeout from 1 through 600000 milliseconds. A timed-out attempt fails the task and is never retried automatically.
+- `signal` cancels active work and prevents later tasks/chunks from being scheduled.
+If cancellation occurs before a skill invocation starts, the task is `cancelled`.
+If cancellation occurs after invocation begins, the task and workflow are
+`indeterminate` because the external outcome may be unknown.
+- `taskTimeoutMs` is an optional per-attempt timeout from 1 through 600000 milliseconds.
+A timeout after invocation begins produces `indeterminate` and is never retried automatically.
 - Every skill receives an `AbortSignal` in `SkillExecutionContext.signal`. Providers should pass it to cancellable APIs and stop their own work when aborted. JavaScript cannot forcibly terminate a provider that ignores the signal; the runtime stops waiting for it, but that provider may continue in the background.
 - `deadlineAt` is supplied in the skill context and `task.started` event when a timeout is configured.
 - `onEvent` receives `task.started`, `task.retrying`, `task.completed`, `task.failed`, `task.skipped` and `task.cancelled` events. Attempt numbers and retry delays are included where relevant. Event timestamps are Unix epoch milliseconds. Observer exceptions are isolated and do not change workflow results.
