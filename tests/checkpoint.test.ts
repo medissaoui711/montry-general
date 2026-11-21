@@ -51,11 +51,11 @@ describe("workflow checkpoints",()=>{
     await expect(reconcileWorkflowTask(store,registry,{
       runId:"reconcile-run",taskId:"task-a",expectedRevision:0,resolution:"retry-authorized",
       actorId:"operator:qa",evidence:"Stale evidence",reason:"No operation found.",
-    })).rejects.toThrow(/revision conflict/i);
+    },async () => true)).rejects.toThrow(/revision conflict/i);
     await expect(reconcileWorkflowTask(store,registry,{
       runId:"reconcile-run",taskId:"task-a",expectedRevision:1,resolution:"completed",
       actorId:"operator:qa",evidence:"bad output",output:{confirmed:"yes"},
-    })).rejects.toThrow();
+    },async () => true)).rejects.toThrow();
   });
   it("requires an explicit output property for completed reconciliation",async()=>{
     const store=new InMemoryWorkflowRunStore();
