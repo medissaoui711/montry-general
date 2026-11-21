@@ -1,8 +1,10 @@
 # Workflow run checkpoints
 
 The orchestration package exposes a versioned checkpoint format and a pluggable
-`WorkflowRunStore` contract. Checkpoints identify a run independently from the
-workflow ID and include a SHA-256 fingerprint of the workflow definition.
+`WorkflowRunStore` contract. The runtime integrates this contract for optional
+checkpoint persistence and resume when the caller supplies both `runId` and a
+store. Checkpoints identify a run independently from the workflow ID and include
+a SHA-256 fingerprint of the workflow definition.
 
 ## Store contract
 
@@ -13,20 +15,40 @@ workflow ID and include a SHA-256 fingerprint of the workflow definition.
   compare-and-swap writes; a process-local mutex is not sufficient.
 
 `InMemoryWorkflowRunStore` is intended for tests and single-process use only. It
-does not survive process restarts and is not a production durable backend.
+does not survive process restarts and is not a production durable backend. No
+filesystem, SQLite or hosted database adapter is included in this repository.
+
+## Runtime integration
+
+The runtime supports the following behavior when `runId` and `checkpointStore`
+are provided together:
+
+- A new run writes its initial pending-task checkpoint before any provider executes.
+- A task is persisted as `running` before its provider is invoked.
+- A validated output is persisted as `completed` before dependent tasks are scheduled.
+- Writes are serialized within one execution so parallel tasks cannot overwrite each
+  other's snapshots.
+- With `resume: true`, the runtime validates the workflow fingerprint, task set,
+  selected skill IDs and versions before restoring completed outputs.
+- Completed outputs are validated again against the currently registered output schema.
+
+This is runtime support against a caller-provided store, not a claim that Montry
+ships a durable production persistence backend. See
+[workflow-checkpoint-resume.md](workflow-checkpoint-resume.md) for the resume
+contract and example.
 
 ## Execution safety
 
-This package addition defines storage primitives only; it does not yet claim that
-workflow execution can resume automatically. A future runtime integration must
-validate workflow fingerprints and skill versions before restoring outputs.
-
 A task left in `running` when a process disappears is indeterminate: the provider
 may have performed an external side effect before the checkpoint was updated.
-Do not automatically rerun such a task unless the skill explicitly guarantees
-safe repetition (for example through durable idempotency keys or deduplication).
-Exactly-once execution of external effects cannot be guaranteed by checkpoint
-storage alone.
+The runtime only replays interrupted states when the skill declares
+`retrySafe: true`; otherwise it fails closed and requires operator intervention.
+
+Do not interpret checkpoint storage as exactly-once execution. Skills that opt
+into safe replay should use durable idempotency keys, deduplication or
+transactional provider APIs wherever possible. A provider timeout or process
+failure may leave an external side effect uncertain even when the local checkpoint
+does not show completion.
 
 Checkpoint schema version 1 supports task states: `pending`, `running`,
-`completed`, `failed`, `skipped`, `cancelled`, and `indeterminate`.
+`completed`, `failed`, `skipped`, `cancelled` and `indeterminate`.
