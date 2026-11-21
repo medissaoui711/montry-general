@@ -181,6 +181,9 @@ export async function executeWorkflow(
           if (saved.status === "indeterminate") {
             throw new Error(`Task "${planned.taskId}" has an indeterminate external outcome; reconciliation is required before resume and retrySafe cannot authorize replay.`);
           }
+          if (saved.reconciliation?.resolution === "failed") {
+            throw new Error(`Task "${planned.taskId}" was reconciled as failed; create a new run or explicitly reconcile it as retry-authorized before replay.`);
+          }
           if (skill.retrySafe !== true) {
             throw new Error(`Task "${planned.taskId}" has checkpoint status "${saved.status}" and is not declared retrySafe; refusing possible duplicate side effects.`);
           }
