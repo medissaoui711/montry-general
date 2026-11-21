@@ -57,6 +57,25 @@ describe("workflow checkpoints",()=>{
       actorId:"operator:qa",evidence:"bad output",output:{confirmed:"yes"},
     },async () => true)).rejects.toThrow();
   });
+  it("requires host authorization before reading or changing reconciliation state",async()=>{
+    const store=new InMemoryWorkflowRunStore();
+    const registry=new SkillRegistry().register({
+      id:"reconcile.auth",version:"1.0.0",inputSchema:z.object({}),
+      outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true}),
+    });
+    const definition={id:"reconcile-auth",tasks:[{id:"task",skill:"reconcile.auth",input:{},dependsOn:[]}]};
+    await store.save({
+      schemaVersion:1,runId:"reconcile-auth",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"reconcile.auth",skillVersion:"1.0.0",status:"indeterminate",error:"Outcome unknown.",updatedAt:1}],
+      updatedAt:1,
+    });
+    await expect(reconcileWorkflowTask(store,registry,{
+      runId:"reconcile-auth",taskId:"task",expectedRevision:0,resolution:"failed",
+      actorId:"operator:unauthorized",evidence:"No verified evidence.",reason:"Not approved.",
+    },async () => false)).rejects.toThrow(/not authorized/i);
+    expect((await store.load("reconcile-auth"))?.revision).toBe(0);
+  });
   it("requires an explicit output property for completed reconciliation",async()=>{
     const store=new InMemoryWorkflowRunStore();
     const registry=new SkillRegistry().register({
