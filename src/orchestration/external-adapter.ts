@@ -126,7 +126,22 @@ export async function executeExternalSkill(
   }
 
   const parsedInput = skill.inputSchema.parse(input);
-  const rawResult = await adapter.execute({descriptor, input: parsedInput, context});
+  let rawResult: unknown;
+  try {
+    rawResult = await adapter.execute({descriptor, input: parsedInput, context});
+  } catch {
+    // Once adapter invocation begins, a thrown error cannot prove that no remote
+    // dispatch or side effect occurred. Return a conservative uncertain outcome;
+    // never let callers mistake this for a confirmed, replay-safe failure.
+    const sideEffectPossible = descriptor.sideEffect !== "read-only";
+    return {
+      status: "indeterminate",
+      reason: "Adapter execution ended without a confirmed result.",
+      dispatchOccurred: true,
+      sideEffectPossible,
+      reconciliationRequired: sideEffectPossible,
+    };
+  }
   const result = ExternalAdapterResultSchema.parse(rawResult);
 
   if (result.status === "completed") {
