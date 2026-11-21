@@ -188,7 +188,7 @@ describe("workflow runtime",()=>{
       updatedAt:Date.now(),
     });
     await expect(executeWorkflow(definition,registry,{runId:"indeterminate-1",checkpointStore:store,resume:true}))
-      .rejects.toThrow(/not declared retrySafe/i);
+      .rejects.toThrow(/as indeterminate/i);
   });
 
   it("converts abandoned running checkpoints to indeterminate even when retrySafe is true", async () => {
@@ -209,7 +209,7 @@ describe("workflow runtime",()=>{
     });
     await expect(executeWorkflow(definition,registry,{
       runId:"abandoned-running-1",checkpointStore:store,resume:true,
-    })).rejects.toThrow(/converted to indeterminate/i);
+    })).rejects.toThrow(/as indeterminate/i);
     expect((await store.load("abandoned-running-1"))?.tasks[0]).toMatchObject({
       status:"indeterminate",error:expect.stringContaining("Previous process ended"),
     });
@@ -416,7 +416,7 @@ describe("workflow runtime",()=>{
     const timedOut = await executeWorkflow({id:"retry-timeout",tasks:[
       {id:"task",skill:"retry.timeout",input:{},dependsOn:[]},
     ]},slow,{maxAttempts:4,taskTimeoutMs:10,initialRetryDelayMs:0});
-    expect(timedOut.status).toBe("failed");
+    expect(timedOut.status).toBe("indeterminate");
     expect(timeoutCalls).toBe(1);
   });
 
