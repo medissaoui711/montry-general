@@ -53,10 +53,11 @@ export type TaskExecutionResult =
   | {taskId: string; skillId: string; status: "completed"; output: unknown}
   | {taskId: string; skillId: string; status: "failed"; error: string}
   | {taskId: string; skillId: string; status: "skipped"; reason: string}
-  | {taskId: string; skillId: string; status: "cancelled"; reason: string};
+  | {taskId: string; skillId: string; status: "cancelled"; reason: string}
+  | {taskId: string; skillId: string; status: "indeterminate"; reason: string; reconciliationRequired: true};
 export type WorkflowExecutionResult = {
   workflowId: string;
-  status: "completed" | "failed" | "cancelled";
+  status: "completed" | "failed" | "cancelled" | "indeterminate";
   tasks: TaskExecutionResult[];
   outputs: Record<string, unknown>;
 };
@@ -87,7 +88,8 @@ export type WorkflowExecutionEvent =
   | {type: "task.completed"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number}
   | {type: "task.failed"; workflowId: string; taskId: string; skillId: string; at: number; attempt: number; error: string}
   | {type: "task.skipped"; workflowId: string; taskId: string; skillId: string; at: number; reason: string}
-  | {type: "task.cancelled"; workflowId: string; taskId: string; skillId: string; at: number; reason: string};
+  | {type: "task.cancelled"; workflowId: string; taskId: string; skillId: string; at: number; reason: string}
+  | {type: "task.indeterminate"; workflowId: string; taskId: string; skillId: string; at: number; reason: string; reconciliationRequired: true};
 
 export type WorkflowExecutionOptions = {
   /** Maximum number of independent tasks to execute concurrently. Defaults to 1. */
