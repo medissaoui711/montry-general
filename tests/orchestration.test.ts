@@ -5,6 +5,7 @@ import {describe, expect, it, vi} from "vitest";
 import {z} from "zod";
 import {
   executeWorkflow,
+  reconcileWorkflowTask,
   InMemoryWorkflowRunStore,
   loadSkillCatalog,
   planWorkflow,
@@ -135,9 +136,16 @@ describe("workflow runtime",()=>{
     await secondStarted;
     controller.abort("simulate interruption after first task");
     const initial = await running;
-    expect(initial.status).toBe("cancelled");
-    expect((await store.load("resume-1"))?.tasks.map((task)=>task.status)).toEqual(["completed","cancelled"]);
+    expect(initial.status).toBe("indeterminate");
+    expect(initial.tasks[1]).toMatchObject({status:"indeterminate",reconciliationRequired:true});
+    expect((await store.load("resume-1"))?.tasks.map((task)=>task.status)).toEqual(["completed","indeterminate"]);
 
+    await reconcileWorkflowTask(store,skills,{
+      runId:"resume-1",taskId:"second",expectedRevision:(await store.load("resume-1"))!.revision,
+      resolution:"retry-authorized",actorId:"operator:test",
+      evidence:"Provider status lookup confirms the first request was not accepted.",
+      reason:"Authoritative provider lookup confirmed no side effect occurred.",
+    });
     const resumed = await executeWorkflow(definition,skills,{runId:"resume-1",checkpointStore:store,resume:true});
     expect(resumed.status).toBe("completed");
     expect(first).toHaveBeenCalledTimes(1);
@@ -287,16 +295,18 @@ describe("workflow runtime",()=>{
         }, {once:true});
       }),
     });
+    const store = new InMemoryWorkflowRunStore();
     const result = await executeWorkflow({id:"timeout-flow",tasks:[
       {id:"slow-task",skill:"slow",input:{},dependsOn:[]},
     ]},skills,{
-      taskTimeoutMs:10,
+      runId:"timeout-run",checkpointStore:store,taskTimeoutMs:10,
       onEvent:(event) => { events.push(event.type); },
     });
-    expect(result.status).toBe("failed");
-    expect(result.tasks[0]).toMatchObject({status:"failed",error:"Task timed out after 10ms."});
+    expect(result.status).toBe("indeterminate");
+    expect(result.tasks[0]).toMatchObject({status:"indeterminate",reconciliationRequired:true});
+    expect((await store.load("timeout-run"))?.tasks[0]).toMatchObject({status:"indeterminate",error:expect.stringContaining("outcome is unknown")});
     expect(observedAbort).toBe(true);
-    expect(events).toEqual(["task.started","task.failed"]);
+    expect(events).toEqual(["task.started","task.indeterminate"]);
   });
 
   it("isolates observer exceptions and validates timeout configuration", async () => {
