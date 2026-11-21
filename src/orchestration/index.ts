@@ -1,5 +1,6 @@
 export * from "./checkpoint";
 export * from "./contracts";
+export * from "./external-adapter";
 export * from "./implementation-registry";
 export * from "./manifest";
 export * from "./planner";
