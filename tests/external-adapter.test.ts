@@ -97,6 +97,19 @@ describe("external adapter contract", () => {
     expect(result).toMatchObject({status: "indeterminate", reconciliationRequired: true});
   });
 
+  it("does not dispatch when the execution context is already cancelled or expired", async () => {
+    const execute = vi.fn(async () => ({status: "completed", output: {items: []}}));
+    const controller = new AbortController();
+    controller.abort();
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, {
+      ...context, signal: controller.signal,
+    })).rejects.toThrow(/cancelled before dispatch/i);
+    await expect(executeExternalSkill(adapter(execute), descriptor, skill, {query: "x"}, {
+      ...context, deadlineAt: Date.now() - 1,
+    })).rejects.toThrow(/deadline expired/i);
+    expect(execute).not.toHaveBeenCalled();
+  });
+  
   it("requires a provider idempotency key before dispatch when declared", async () => {
     const execute = vi.fn(async () => ({status: "completed", output: {items: []}}));
     const requiresKey = {...descriptor, idempotency: "provider-key" as const};
