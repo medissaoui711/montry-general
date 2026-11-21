@@ -14,7 +14,7 @@ The workflow runtime now exposes `indeterminate` at task and workflow level when
 
 Indeterminate checkpoints cannot be resumed automatically, even when `retrySafe` is true. The new `reconcileWorkflowTask` operation supports evidence-backed resolutions to completed (output schema validated), failed, or retry-authorized (operator asserts authoritative evidence confirms no effect). Each reconciliation records actor, evidence, resolution and timestamp, requires a host-supplied authorization callback, and uses checkpoint revision compare-and-swap to reject stale concurrent decisions. The library does not authenticate users; the embedding application must supply that boundary. Runtime writes also use compare-and-swap.
 
-The repository now includes `FileWorkflowRunStore`, a durable single-host backend using atomic replacement and per-run compare-and-swap locks, alongside the process-local in-memory store. It is not a distributed/multi-host database. The runtime marks interrupted calls indeterminate but cannot prove whether a remote operation was dispatched or stopped. The library requires a host authorization callback for reconciliation, but the repository does not ship an authenticated operator UI/API or identity provider integration.
+The repository now includes `FileWorkflowRunStore`, a durable single-host backend using atomic replacement and per-run compare-and-swap locks, alongside the process-local in-memory store. It is not a distributed/multi-host database. The runtime marks interrupted calls indeterminate but cannot prove whether a remote operation was dispatched or stopped. The library requires a host authorization callback for reconciliation, but the repository does not ship an authenticated operator UI/API or identity provider integration. A pure deny-by-default policy evaluator is available in `src/orchestration/policy.ts`; it is not yet enforced as a mandatory dispatch gate and relies on the host to authenticate principals, verify approval provenance, and create durable budget reservations.
 
 **Remaining blocking findings:** MCP remains NO-GO until a multi-host deployment selects an appropriate transactional store (if needed) and the embedding application provides an authenticated operator boundary. The MCP transport, identity pinning, tool allowlist, policy, payload bounds, secret controls and audit lifecycle also remain unimplemented and untested.
 
@@ -73,7 +73,7 @@ Default decision is deny. Discovery does not authorize invocation. A read-only l
 - If a request may have been dispatched and the response is lost, timed out or cancelled, return indeterminate.
 - Do not automatically replay indeterminate calls. Reconcile against authoritative provider state or require operator review.
 - Provider idempotency keys are useful only when provider semantics, key scope and retention are verified. A local key field alone is not deduplication.
-- The current runtime's timeout race can abandon a still-running provider promise and currently records failed/cancelled, not indeterminate. Runtime and checkpoint contracts must be extended before non-replay-safe MCP operations are enabled.
+- The runtime and checkpoint contracts now record indeterminate outcomes when timeout or cancellation wins after invocation begins, and refuse automatic replay of uncertain tasks. This does not prove remote cancellation or prevent a provider promise from continuing in the background.
 
 ### 6. Observability and revocation
 
@@ -99,7 +99,7 @@ A server kill switch must block new dispatches immediately. Revocation must prev
 
 **Current decision: NO-GO for MCP implementation and provider activation.**
 
-The next permitted work is design and tests for the runtime's indeterminate outcome/reconciliation model. After that work is reviewed and passes CI, select and implement one MCP transport behind the host-configured allowlist. Do not implement broad multi-transport discovery or dynamic server installation in the first increment.
+The next permitted work is to complete and review the policy-to-dispatch enforcement boundary, authenticated operator integration, budget reservation/reconciliation and audit lifecycle. After those gates are reviewed and pass CI, select and implement one MCP transport behind the host-configured allowlist. Do not implement broad multi-transport discovery or dynamic server installation in the first increment.
 
 ## Open decisions
 
