@@ -29,10 +29,12 @@ monotonic per-run writes (for example with a database transaction or compare-and
 ## Safe resume policy
 
 A task restored as `indeterminate` is never eligible for automatic replay, regardless
-of `retrySafe`. Running, failed or cancelled checkpoints also require explicit
-operator review unless the provider's retry guarantee is separately established by
-the host policy. Skipped tasks return to pending because they were not invoked by the
-previous execution.
+of `retrySafe`. A task left `running` after process loss is atomically converted to
+`indeterminate` and resume stops. This is conservative because the provider may have
+completed an external effect before the process disappeared. Failed or cancelled
+checkpoints may be replayed only when the skill declares `retrySafe: true`; a task
+explicitly reconciled as failed is terminal and is not automatically replayed.
+Skipped tasks return to pending because they were not invoked by the previous execution.
 
 Use `reconcileWorkflowTask(store, registry, input)` to resolve an indeterminate task.
 The call requires the current checkpoint revision, a non-empty actor ID and evidence.
