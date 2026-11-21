@@ -1,5 +1,8 @@
 import {describe,expect,it} from "vitest";
-import {InMemoryWorkflowRunStore,WorkflowCheckpointSchema,fingerprintWorkflow,reconcileWorkflowTask} from "../src/orchestration/checkpoint";
+import {mkdtemp,rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import path from "node:path";
+import {FileWorkflowRunStore,InMemoryWorkflowRunStore,WorkflowCheckpointSchema,fingerprintWorkflow,reconcileWorkflowTask} from "../src/orchestration/checkpoint";
 import {SkillRegistry} from "../src/orchestration/registry";
 import {z} from "zod";
 
@@ -93,6 +96,26 @@ describe("workflow checkpoints",()=>{
       runId:"reconcile-no-output",taskId:"task",expectedRevision:0,resolution:"completed",
       actorId:"operator:qa",evidence:"Provider confirms completion.",
     } as never,async () => true)).rejects.toThrow(/output is required/i);
+  });
+  it("persists file checkpoints across instances and rejects stale concurrent writes",async()=>{
+    const directory=await mkdtemp(path.join(tmpdir(),"montry-checkpoint-"));
+    try {
+      const firstStore=new FileWorkflowRunStore(directory);
+      const secondStore=new FileWorkflowRunStore(directory);
+      const initial={...checkpoint,runId:"file-run",revision:0};
+      expect(await firstStore.compareAndSwap("file-run",null,initial)).toBe(true);
+      const restored=await secondStore.load("file-run");
+      expect(restored).toEqual(initial);
+      const next={...initial,revision:1,updatedAt:11};
+      const results=await Promise.all([
+        firstStore.compareAndSwap("file-run",0,next),
+        secondStore.compareAndSwap("file-run",0,next),
+      ]);
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect((await firstStore.load("file-run"))?.revision).toBe(1);
+    } finally {
+      await rm(directory,{recursive:true,force:true});
+    }
   });
   it("stores defensive copies and requires increasing revisions",async()=>{
     const store=new InMemoryWorkflowRunStore();
