@@ -55,7 +55,15 @@ export const ExternalAdapterResultSchema = z.union([
     message: z.string().trim().min(1),
     dispatchOccurred: z.boolean(),
     sideEffectPossible: z.boolean(),
-  }).strict(),
+  }).strict().superRefine((result, context) => {
+    if (!result.dispatchOccurred && result.sideEffectPossible) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sideEffectPossible"],
+        message: "A result cannot report a possible side effect when dispatch did not occur.",
+      });
+    }
+  }),
   z.object({
     status: z.literal("indeterminate"),
     reason: z.string().trim().min(1),
