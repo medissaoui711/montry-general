@@ -28,10 +28,17 @@ monotonic per-run writes (for example with a database transaction or compare-and
 
 ## Safe resume policy
 
-A task restored as `running`, `indeterminate`, `failed`, or `cancelled` is only
-eligible for automatic replay when its skill declares `retrySafe: true`. Otherwise
-resume fails closed and explains which task needs operator intervention. Skipped tasks
-return to pending because they were not invoked by the previous execution.
+A task restored as `indeterminate` is never eligible for automatic replay, regardless
+of `retrySafe`. Running, failed or cancelled checkpoints also require explicit
+operator review unless the provider's retry guarantee is separately established by
+the host policy. Skipped tasks return to pending because they were not invoked by the
+previous execution.
+
+Use `reconcileWorkflowTask(store, registry, input)` to resolve an indeterminate task.
+The call requires the current checkpoint revision, a non-empty actor ID and evidence.
+A stale revision fails closed. `retry-authorized` requires a reason and means an
+operator has verified that the provider did not apply the operation. It is not a
+general-purpose retry switch.
 
 A process may crash after a provider performs an external side effect but before its
 completed output is durably saved. Such a task is indistinguishable from an interrupted
