@@ -159,6 +159,22 @@ export async function executeWorkflow(
       if (checkpoint.workflowFingerprint !== fingerprint) {
         throw new Error("Workflow definition fingerprint does not match the saved checkpoint.");
       }
+      const abandonedTasks = checkpoint.tasks.filter((task) => task.status === "running");
+      if (abandonedTasks.length > 0) {
+        const recoveredAt = Date.now();
+        const recovered: WorkflowCheckpoint = {
+          ...checkpoint,
+          revision:checkpoint.revision + 1,
+          updatedAt:recoveredAt,
+          tasks:checkpoint.tasks.map((task) => task.status === "running"
+            ? {...task,status:"indeterminate" as const,error:"Previous process ended while this task was running; external outcome is unknown and reconciliation is required.",output:undefined,updatedAt:recoveredAt}
+            : task),
+        };
+        const recoveredSaved = await store.compareAndSwap(options.runId,checkpoint.revision - 1,recovered);
+        if (!recoveredSaved) throw new Error("Checkpoint revision conflict while recovering abandoned running tasks.");
+        checkpoint = recovered;
+        throw new Error(`Recovered ${abandonedTasks.length} interrupted running task(s) as indeterminate; reconcile them before resuming.`);
+      }
       const checkpointById = new Map(checkpoint.tasks.map((task) => [task.taskId, task]));
       if (checkpointById.size !== preview.tasks.length || preview.tasks.some((task) => !checkpointById.has(task.taskId))) {
         throw new Error("Checkpoint task set does not match the current workflow plan.");
