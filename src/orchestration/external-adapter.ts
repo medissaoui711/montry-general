@@ -55,15 +55,18 @@ export const ExternalAdapterResultSchema = z.discriminatedUnion("status", [
     message: z.string().trim().min(1),
     dispatchOccurred: z.boolean(),
     sideEffectPossible: z.boolean(),
-    retrySafe: z.boolean(),
   }).strict(),
   z.object({
     status: z.literal("indeterminate"),
     reason: z.string().trim().min(1),
     dispatchOccurred: z.literal(true),
-    sideEffectPossible: z.literal(true),
-    reconciliationRequired: z.literal(true),
-  }).strict(),
+    sideEffectPossible: z.boolean(),
+    reconciliationRequired: z.boolean(),
+  }).strict().superRefine((result, context) => {
+    if (result.sideEffectPossible && !result.reconciliationRequired) {
+      context.addIssue({code: z.ZodIssueCode.custom, path: ["reconciliationRequired"], message: "Possible side effects require reconciliation."});
+    }
+  }),
 ]);
 
 export type ExternalAdapterResult = z.infer<typeof ExternalAdapterResultSchema>;
@@ -83,7 +86,7 @@ export type ExternalSkillBinding = Pick<SkillDefinition, "id" | "version" | "cap
  */
 export async function executeExternalSkill(
   adapter: ExternalSkillAdapter,
-  descriptorInput: ExternalSkillDescriptor,
+  descriptorInput: unknown,
   skill: ExternalSkillBinding,
   input: unknown,
   context: ExternalAdapterExecutionContext,
@@ -105,12 +108,16 @@ export async function executeExternalSkill(
     throw new Error("External skill capabilities do not match the trusted binding.");
   }
 
+  if (descriptor.idempotency === "provider-key" && !context.idempotencyKey) {
+    throw new Error("This provider requires an idempotency key before dispatch.");
+  }
+
   const parsedInput = skill.inputSchema.parse(input);
   const rawResult = await adapter.execute({descriptor, input: parsedInput, context});
   const result = ExternalAdapterResultSchema.parse(rawResult);
 
   if (result.status === "completed") {
-    skill.outputSchema.parse(result.output);
+    return {...result, output: skill.outputSchema.parse(result.output)};
   }
   return result;
 }
