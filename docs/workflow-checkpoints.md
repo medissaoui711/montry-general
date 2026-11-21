@@ -44,8 +44,11 @@ contract and example.
 
 A task left in `running` when a process disappears is indeterminate: the provider
 may have performed an external side effect before the checkpoint was updated.
-The runtime only replays interrupted states when the skill declares
-`retrySafe: true`; otherwise it fails closed and requires operator intervention.
+Timeout or cancellation after the skill invocation has begun is surfaced as
+`indeterminate`, persisted when a checkpoint store is configured, and never
+automatically replayed—even when `retrySafe: true`. Cancellation before invocation
+begins remains `cancelled`. A task left in `running` after process loss is also
+treated as uncertain and cannot be resumed automatically.
 
 Do not interpret checkpoint storage as exactly-once execution. Skills that opt
 into safe replay should use durable idempotency keys, deduplication or
