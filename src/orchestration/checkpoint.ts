@@ -202,7 +202,9 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
       if (info.size > this.maxCheckpointBytes) throw new Error("Checkpoint file exceeds maxCheckpointBytes.");
       const raw = await readFile(file,"utf8");
       if (Buffer.byteLength(raw,"utf8") > this.maxCheckpointBytes) throw new Error("Checkpoint file exceeds maxCheckpointBytes.");
-      return WorkflowCheckpointSchema.parse(JSON.parse(raw));
+      const parsed = WorkflowCheckpointSchema.parse(JSON.parse(raw));
+      if (parsed.runId !== runId) throw new Error("Checkpoint file runId does not match its storage key.");
+      return parsed;
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
       throw error;
