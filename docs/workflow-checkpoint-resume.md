@@ -53,7 +53,7 @@ provider APIs wherever possible.
 
 If a checkpoint save fails before invocation, the provider is not called. If saving a
 completed result fails after the provider returns, the persisted state remains running;
-the next resume applies the same conservative replay policy.
+the next resume converts it to indeterminate and requires reconciliation before replay.
 
 ## Limits
 
