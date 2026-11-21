@@ -40,6 +40,17 @@ async function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void
   });
 }
 
+class ExecutionInterruptedError extends Error {
+  constructor(
+    message: string,
+    readonly kind: "timeout" | "cancelled",
+    readonly invocationStarted: boolean,
+  ) {
+    super(message);
+    this.name = "ExecutionInterruptedError";
+  }
+}
+
 async function executeWithControls(
   execute: (signal: AbortSignal) => unknown | Promise<unknown>,
   parentSignal: AbortSignal | undefined,
@@ -48,36 +59,39 @@ async function executeWithControls(
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let rejectAbort!: (error: Error) => void;
-  let timedOut = false;
+  let invocationStarted = false;
   const aborted = new Promise<never>((_, reject) => { rejectAbort = reject; });
   const onParentAbort = () => {
     const reason = abortReason(parentSignal!);
     controller.abort(reason);
-    rejectAbort(new Error(reason));
+    rejectAbort(new ExecutionInterruptedError(reason,"cancelled",invocationStarted));
   };
 
   if (parentSignal?.aborted) onParentAbort();
-  else parentSignal?.addEventListener("abort", onParentAbort, {once: true});
+  else parentSignal?.addEventListener("abort", onParentAbort, {once:true});
 
   if (timeoutMs !== undefined) {
     timeout = setTimeout(() => {
-      timedOut = true;
       const reason = `Task timed out after ${timeoutMs}ms.`;
       controller.abort(reason);
-      rejectAbort(new Error(reason));
-    }, timeoutMs);
+      rejectAbort(new ExecutionInterruptedError(reason,"timeout",invocationStarted));
+    },timeoutMs);
   }
 
   try {
-    if (controller.signal.aborted) throw new Error(abortReason(controller.signal));
-    return await Promise.race([Promise.resolve().then(() => execute(controller.signal)), aborted]);
-  } catch (error) {
-    if (timedOut) throw new Error(`Task timed out after ${timeoutMs}ms.`);
-    if (parentSignal?.aborted) throw new Error(abortReason(parentSignal));
-    throw error;
+    const execution = Promise.resolve().then(() => {
+      if (controller.signal.aborted) throw new ExecutionInterruptedError(
+        abortReason(controller.signal),
+        parentSignal?.aborted ? "cancelled" : "timeout",
+        false,
+      );
+      invocationStarted = true;
+      return execute(controller.signal);
+    });
+    return await Promise.race([execution,aborted]);
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
-    parentSignal?.removeEventListener("abort", onParentAbort);
+    parentSignal?.removeEventListener("abort",onParentAbort);
   }
 }
 
@@ -268,8 +282,8 @@ export async function executeWorkflow(
               break;
             } catch (error) {
               const message = messageOf(error);
-              const timedOut = message.startsWith("Task timed out after ");
-              const canRetry = skill.retrySafe === true && attempt < maxAttempts && !timedOut && !options.signal?.aborted;
+              if (error instanceof ExecutionInterruptedError) throw error;
+              const canRetry = skill.retrySafe === true && attempt < maxAttempts && !options.signal?.aborted;
               if (!canRetry) throw error;
               const delayMs = Math.min(maxRetryDelayMs, Math.round(initialRetryDelayMs * retryBackoffMultiplier ** (attempt - 1)));
               emit(options, {type:"task.retrying",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,nextAttempt:attempt + 1,delayMs,error:message});
@@ -285,19 +299,25 @@ export async function executeWorkflow(
           return {taskId,skillId:planned.skillId,status:"completed",output:output.data};
         } catch (error) {
           const message = messageOf(error);
-          if (options.signal?.aborted) {
+          if (error instanceof ExecutionInterruptedError && error.invocationStarted) {
+            const reason = `${error.kind === "timeout" ? "Execution timed out" : "Execution was cancelled"} after skill invocation began; external outcome is unknown. ${message}`;
+            await persistTask(taskId,(current) => ({...current,status:"indeterminate",error:reason,output:undefined,updatedAt:Date.now()}));
+            emit(options,{type:"task.indeterminate",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),reason,reconciliationRequired:true});
+            return {taskId,skillId:planned.skillId,status:"indeterminate",reason,reconciliationRequired:true};
+          }
+          if (error instanceof ExecutionInterruptedError && error.kind === "cancelled") {
             await persistTask(taskId,(current) => ({...current,status:"cancelled",error:message,output:undefined,updatedAt:Date.now()}));
-            emit(options, {type:"task.cancelled",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),reason:message});
+            emit(options,{type:"task.cancelled",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),reason:message});
             return {taskId,skillId:planned.skillId,status:"cancelled",reason:message};
           }
           await persistTask(taskId,(current) => ({...current,status:"failed",error:message,output:undefined,updatedAt:Date.now()}));
-          emit(options, {type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,error:message});
+          emit(options,{type:"task.failed",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,error:message});
           return {taskId,skillId:planned.skillId,status:"failed",error:message};
         }
       }));
       for (const result of chunkResults) results.set(result.taskId, result);
       if (options.signal?.aborted) { cancelled = true; break; }
-      if (chunkResults.some((result) => result.status === "failed" || result.status === "cancelled")) {
+      if (chunkResults.some((result) => result.status === "failed" || result.status === "cancelled" || result.status === "indeterminate")) {
         stopped = true;
         break;
       }
@@ -305,6 +325,7 @@ export async function executeWorkflow(
   }
 
   const failed = [...results.values()].some((result) => result.status === "failed");
+  const indeterminate = [...results.values()].some((result) => result.status === "indeterminate");
   cancelled ||= options.signal?.aborted ?? false;
   for (const planned of preview.tasks) {
     if (results.has(planned.taskId)) continue;
@@ -328,7 +349,7 @@ export async function executeWorkflow(
   const orderedResults = preview.tasks.map((planned) => results.get(planned.taskId)!);
   return {
     workflowId:definition.id,
-    status:failed ? "failed" : cancelled ? "cancelled" : "completed",
+    status:indeterminate ? "indeterminate" : failed ? "failed" : cancelled ? "cancelled" : "completed",
     tasks:orderedResults,
     outputs,
   };
