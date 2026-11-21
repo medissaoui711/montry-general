@@ -157,6 +157,23 @@ type ExternalExecutionContext = {
 
 An adapter MUST validate all external inputs and outputs. It MUST reject undeclared tools, capabilities, fields and operations. It MUST NOT silently coerce an unknown response into a successful result.
 
+### 6.1 Initial typed contract implementation
+
+The repository now contains an initial provider-neutral contract in
+`src/orchestration/external-adapter.ts`, exported from the orchestration package.
+It pins provider version and source revision, binds the external skill ID/version
+and exact capability set to a trusted host definition, validates input before
+dispatch and validates the result envelope and completed output after dispatch.
+The result contract distinguishes completed, failed and indeterminate outcomes.
+A provider-key idempotency declaration requires a caller-supplied key; an already
+cancelled or expired execution context is rejected before dispatch.
+
+This is a contract boundary only. It does not provide provider discovery, transport,
+authorization, approval enforcement, cost reservation, durable idempotency storage,
+or a concrete MCP/CLI/HTTP adapter. Contract tests are in
+`tests/external-adapter.test.ts`; they have been committed but are not claimed
+as passing until executed in CI or a local test environment.
+
 ## 7. MCP adapter requirements
 
 MCP support is a future implementation target. A conforming MCP adapter MUST:
