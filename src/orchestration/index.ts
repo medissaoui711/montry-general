@@ -4,5 +4,6 @@ export * from "./external-adapter";
 export * from "./implementation-registry";
 export * from "./manifest";
 export * from "./planner";
+export * from "./policy";
 export * from "./registry";
 export * from "./runtime";
