@@ -36,8 +36,10 @@ checkpoints may be replayed only when the skill declares `retrySafe: true`; a ta
 explicitly reconciled as failed is terminal and is not automatically replayed.
 Skipped tasks return to pending because they were not invoked by the previous execution.
 
-Use `reconcileWorkflowTask(store, registry, input)` to resolve an indeterminate task.
-The call requires the current checkpoint revision, a non-empty actor ID and evidence.
+Use `reconcileWorkflowTask(store, registry, input, authorize)` to resolve an indeterminate task.
+The host MUST provide an authorization callback that authenticates/authorizes the actor
+and operation; the library does not authenticate users. The call requires the current
+checkpoint revision, a non-empty actor ID and evidence.
 A stale revision fails closed. `retry-authorized` requires a reason and means an
 operator has verified that the provider did not apply the operation. It is not a
 general-purpose retry switch.
