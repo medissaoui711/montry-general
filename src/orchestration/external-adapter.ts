@@ -93,6 +93,11 @@ export async function executeExternalSkill(
 ): Promise<ExternalAdapterResult> {
   const descriptor = ExternalSkillDescriptorSchema.parse(descriptorInput);
 
+  if (context.signal.aborted) throw new Error("External skill execution was cancelled before dispatch.");
+  if (context.deadlineAt !== undefined && context.deadlineAt <= Date.now()) {
+    throw new Error("External skill execution deadline expired before dispatch.");
+  }
+
   if (adapter.providerId !== descriptor.providerId
     || adapter.providerVersion !== descriptor.providerVersion
     || adapter.sourceRevision !== descriptor.sourceRevision) {
