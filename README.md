@@ -19,7 +19,7 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 - Bounded parallel execution, cooperative cancellation, per-attempt timeouts, safe opt-in retries and structured lifecycle events.
 - Safe metadata discovery: no dynamic imports, shell execution, package installation or network access.
 
-See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md) and [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md).
+See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md), [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md) and the [External Skill Integration Standard](docs/external-skill-integration.md).
 
 ## Current video capability
 
