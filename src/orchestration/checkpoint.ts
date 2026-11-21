@@ -71,6 +71,14 @@ export type ReconcileWorkflowTaskInput = {
   | {resolution:"retry-authorized"; reason:string}
 );
 
+export type ReconciliationAuthorizationContext = Pick<
+  ReconcileWorkflowTaskInput,
+  "runId" | "taskId" | "actorId" | "resolution"
+>;
+export type ReconciliationAuthorizer = (
+  context: ReconciliationAuthorizationContext,
+) => boolean | Promise<boolean>;
+
 /**
  * Explicitly resolves an indeterminate checkpoint using operator-supplied evidence.
  * Retry authorization is an assertion that authoritative evidence confirms no effect
@@ -80,6 +88,7 @@ export async function reconcileWorkflowTask(
   store: WorkflowRunStore,
   registry: SkillRegistry,
   input: ReconcileWorkflowTaskInput,
+  authorize: ReconciliationAuthorizer,
 ): Promise<WorkflowCheckpoint> {
   const request = z.object({
     runId:z.string().trim().min(1),
@@ -94,6 +103,11 @@ export async function reconcileWorkflowTask(
   if (request.resolution === "completed" && !Object.prototype.hasOwnProperty.call(input,"output")) {
     throw new Error("An output is required when reconciling a task as completed.");
   }
+  if (typeof authorize !== "function") throw new Error("A host reconciliation authorizer is required.");
+  const authorized = await authorize({
+    runId:request.runId,taskId:request.taskId,actorId:request.actorId,resolution:request.resolution,
+  });
+  if (!authorized) throw new Error("Reconciliation was not authorized by the host policy.");
   const current = await store.load(request.runId);
   if (!current) throw new Error(`No checkpoint exists for run "${request.runId}".`);
   const parsed = WorkflowCheckpointSchema.parse(current);
