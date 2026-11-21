@@ -57,6 +57,24 @@ describe("workflow checkpoints",()=>{
       actorId:"operator:qa",evidence:"bad output",output:{confirmed:"yes"},
     })).rejects.toThrow();
   });
+  it("requires an explicit output property for completed reconciliation",async()=>{
+    const store=new InMemoryWorkflowRunStore();
+    const registry=new SkillRegistry().register({
+      id:"reconcile.no-output",version:"1.0.0",inputSchema:z.object({}),
+      outputSchema:z.object({ok:z.boolean()}),execute:()=>({ok:true}),
+    });
+    const definition={id:"reconcile-no-output",tasks:[{id:"task",skill:"reconcile.no-output",input:{},dependsOn:[]}]};
+    await store.save({
+      schemaVersion:1,runId:"reconcile-no-output",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"reconcile.no-output",skillVersion:"1.0.0",status:"indeterminate",error:"Outcome unknown.",updatedAt:1}],
+      updatedAt:1,
+    });
+    await expect(reconcileWorkflowTask(store,registry,{
+      runId:"reconcile-no-output",taskId:"task",expectedRevision:0,resolution:"completed",
+      actorId:"operator:qa",evidence:"Provider confirms completion.",
+    } as never)).rejects.toThrow(/output is required/i);
+  });
   it("stores defensive copies and requires increasing revisions",async()=>{
     const store=new InMemoryWorkflowRunStore();
     await store.save(checkpoint);
