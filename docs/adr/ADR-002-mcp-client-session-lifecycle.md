@@ -14,9 +14,9 @@ The workflow runtime now exposes `indeterminate` at task and workflow level when
 
 Indeterminate checkpoints cannot be resumed automatically, even when `retrySafe` is true. The new `reconcileWorkflowTask` operation supports evidence-backed resolutions to completed (output schema validated), failed, or retry-authorized (operator asserts authoritative evidence confirms no effect). Each reconciliation records actor, evidence, resolution and timestamp, requires a host-supplied authorization callback, and uses checkpoint revision compare-and-swap to reject stale concurrent decisions. The library does not authenticate users; the embedding application must supply that boundary. Runtime writes also use compare-and-swap.
 
-The included `InMemoryWorkflowRunStore` remains process-local and non-durable. A production store must implement transactional compare-and-swap; the repository does not yet ship such a backend or an authenticated operator UI/API. The runtime marks interrupted calls indeterminate but cannot prove whether a remote operation was dispatched or stopped.
+The repository now includes `FileWorkflowRunStore`, a durable single-host backend using atomic replacement and per-run compare-and-swap locks, alongside the process-local in-memory store. It is not a distributed/multi-host database. The runtime marks interrupted calls indeterminate but cannot prove whether a remote operation was dispatched or stopped. The library requires a host authorization callback for reconciliation, but the repository does not ship an authenticated operator UI/API or identity provider integration.
 
-**Remaining blocking findings:** MCP must remain NO-GO until a durable production checkpoint/reconciliation backend and authenticated operator boundary are provided, and the MCP transport, identity pinning, tool allowlist, policy, payload bounds, secret controls and audit lifecycle are implemented and tested.
+**Remaining blocking findings:** MCP remains NO-GO until a multi-host deployment selects an appropriate transactional store (if needed) and the embedding application provides an authenticated operator boundary. The MCP transport, identity pinning, tool allowlist, policy, payload bounds, secret controls and audit lifecycle also remain unimplemented and untested.
 
 ## Proposed architecture
 
@@ -85,8 +85,8 @@ A server kill switch must block new dispatches immediately. Revocation must prev
 
 | Gate | Required work | Evidence required |
 |---|---|---|
-| Runtime outcomes | <strike>Add first-class indeterminate task result and checkpoint state for timeout/cancel after invocation</strike> Implemented in the in-process runtime; durable backend remains external | CI tests proving result status, event emission, checkpoint persistence and no automatic replay |
-| Reconciliation | <strike>Define evidence-backed reconciliation states and revision-checked transitions</strike> Implemented as a library API; authenticated operator workflow and durable audit remain external | CI tests for completed/failed/retry-authorized transitions, output validation and stale revision rejection |
+| Runtime outcomes | <strike>Add first-class indeterminate task result and checkpoint state for timeout/cancel after invocation</strike> Implemented in the in-process runtime; in-memory and single-host file stores are included | CI tests proving result status, event emission, checkpoint persistence and no automatic replay |
+| Reconciliation | <strike>Define evidence-backed reconciliation states and revision-checked transitions</strike> Implemented as a library API with required host authorization callback; authenticated operator workflow and durable audit remain external | CI tests for completed/failed/retry-authorized transitions, output validation and stale revision rejection |
 | MCP transport | Implement one explicitly selected transport first; no dynamic transport selection | Protocol conformance tests and identity verification |
 | Tool allowlist | Host-owned exact tool allowlist and stable bindings | Unknown/new tool denied tests |
 | Bounds | Enforce request/result bytes, depth, counts, string lengths and execution limits | Boundary and oversized payload tests |
