@@ -37,7 +37,7 @@ export type ExternalAdapterRequest = {
   context: ExternalAdapterExecutionContext;
 };
 
-export const ExternalAdapterResultSchema = z.discriminatedUnion("status", [
+export const ExternalAdapterResultSchema = z.union([
   z.object({
     status: z.literal("completed"),
     output: z.unknown(),
@@ -62,12 +62,12 @@ export const ExternalAdapterResultSchema = z.discriminatedUnion("status", [
     dispatchOccurred: z.literal(true),
     sideEffectPossible: z.boolean(),
     reconciliationRequired: z.boolean(),
-  }).strict().superRefine((result, context) => {
-    if (result.sideEffectPossible && !result.reconciliationRequired) {
-      context.addIssue({code: z.ZodIssueCode.custom, path: ["reconciliationRequired"], message: "Possible side effects require reconciliation."});
-    }
-  }),
-]);
+  }).strict(),
+]).superRefine((result, context) => {
+  if (result.status === "indeterminate" && result.sideEffectPossible && !result.reconciliationRequired) {
+    context.addIssue({code: z.ZodIssueCode.custom, path: ["reconciliationRequired"], message: "Possible side effects require reconciliation."});
+  }
+});
 
 export type ExternalAdapterResult = z.infer<typeof ExternalAdapterResultSchema>;
 
