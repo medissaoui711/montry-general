@@ -361,10 +361,10 @@ A passing unit test suite does not prove provider behavior, production security,
 
 ## 19. Delivery roadmap and gates
 
-| Phase | Scope | Exit gate |
-|---|---|---|
-| A — Standard correction | Publish this standard as a draft; reconcile current documentation claims | Independent review accepts document and baseline evidence |
-| B — Adapter contract | Define concrete typed contracts and adapter test harness | Contract tests pass; no provider-specific code in core |
+| Phase | Scope | Exit gate | Status |
+|---|---|---|---|
+| A — Standard correction | Publish this standard as a draft; reconcile current documentation claims | Independent review accepts document and baseline evidence | Documentation published; independent review pending |
+| B — Adapter contract | Define concrete typed contracts and adapter test harness | Contract tests pass; no provider-specific code in core | Initial contract and tests committed; local CI verification pending |
 | C — MCP foundation | Implement an allowlisted MCP client/session adapter | Protocol, identity, timeout, cancellation and security tests pass |
 | D — Policy and governance | Implement approval, data scope, cost reservation, audit and revocation controls | Deny-by-default and budget tests pass |
 | E — New-Term Radar pilot | Integrate only verified, approved capabilities | Source/license/security/cost evidence and pilot acceptance complete |
