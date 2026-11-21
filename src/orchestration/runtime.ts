@@ -170,7 +170,7 @@ export async function executeWorkflow(
             ? {...task,status:"indeterminate" as const,error:"Previous process ended while this task was running; external outcome is unknown and reconciliation is required.",output:undefined,updatedAt:recoveredAt}
             : task),
         };
-        const recoveredSaved = await store.compareAndSwap(options.runId,checkpoint.revision - 1,recovered);
+        const recoveredSaved = await store.compareAndSwap(options.runId,checkpoint.revision,recovered);
         if (!recoveredSaved) throw new Error("Checkpoint revision conflict while recovering abandoned running tasks.");
         checkpoint = recovered;
         throw new Error(`Recovered ${abandonedTasks.length} interrupted running task(s) as indeterminate; reconcile them before resuming.`);
@@ -309,7 +309,14 @@ export async function executeWorkflow(
               if (!canRetry) throw error;
               const delayMs = Math.min(maxRetryDelayMs, Math.round(initialRetryDelayMs * retryBackoffMultiplier ** (attempt - 1)));
               emit(options, {type:"task.retrying",workflowId:definition.id,taskId,skillId:planned.skillId,at:Date.now(),attempt,nextAttempt:attempt + 1,delayMs,error:message});
-              await waitForRetry(delayMs, options.signal);
+              try {
+                await waitForRetry(delayMs, options.signal);
+              } catch (retryError) {
+                if (options.signal?.aborted) {
+                  throw new ExecutionInterruptedError(messageOf(retryError), "cancelled", false);
+                }
+                throw retryError;
+              }
               attempt += 1;
             }
           }
