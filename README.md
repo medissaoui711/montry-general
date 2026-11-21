@@ -17,6 +17,7 @@ Montry coordinates specialist skills through versioned contracts and explicit wo
 - Stable topological planning with cycle, reference and duplicate validation.
 - Dependency-scoped outputs, runtime schema validation and fail-fast execution.
 - Bounded parallel execution, cooperative cancellation, per-attempt timeouts, safe opt-in retries and structured lifecycle events.
+- Typed external adapter contract with pinned provider/source identity, schema-validated input/output, explicit side-effect/cost/idempotency metadata and indeterminate outcomes.
 - Safe metadata discovery: no dynamic imports, shell execution, package installation or network access.
 
 See [docs/skills-orchestration.md](docs/skills-orchestration.md), [docs/skill-catalog.md](docs/skill-catalog.md), [docs/bounded-workflow-execution.md](docs/bounded-workflow-execution.md), [docs/workflow-lifecycle-controls.md](docs/workflow-lifecycle-controls.md) and the [External Skill Integration Standard](docs/external-skill-integration.md).
