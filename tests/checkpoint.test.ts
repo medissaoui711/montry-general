@@ -13,6 +13,15 @@ describe("workflow checkpoints",()=>{
     expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[taskWithoutOutput]})).toThrow();
     expect(()=>WorkflowCheckpointSchema.parse({...checkpoint,tasks:[{...taskWithoutOutput,status:"failed"}]})).toThrow();
   });
+  it("requires a reconciliation reason for indeterminate checkpoint tasks",()=>{
+    const {output: _output, ...taskWithoutOutput}=checkpoint.tasks[0]!;
+    expect(()=>WorkflowCheckpointSchema.parse({
+      ...checkpoint,tasks:[{...taskWithoutOutput,status:"indeterminate"}],
+    })).toThrow(/indeterminate checkpoint tasks/i);
+    expect(()=>WorkflowCheckpointSchema.parse({
+      ...checkpoint,tasks:[{...taskWithoutOutput,status:"indeterminate",error:"Remote outcome unknown."}],
+    })).not.toThrow();
+  });
   it("stores defensive copies and requires increasing revisions",async()=>{
     const store=new InMemoryWorkflowRunStore();
     await store.save(checkpoint);
