@@ -42,7 +42,7 @@ describe("workflow checkpoints",()=>{
       runId:"reconcile-run",taskId:"task-a",expectedRevision:0,resolution:"completed",
       actorId:"operator:qa",evidence:"Provider operation lookup confirms completion.",
       output:{confirmed:true},
-    });
+    },async () => true);
     expect(completed.revision).toBe(1);
     expect(completed.tasks[0]).toMatchObject({
       status:"completed",output:{confirmed:true},
@@ -73,7 +73,7 @@ describe("workflow checkpoints",()=>{
     await expect(reconcileWorkflowTask(store,registry,{
       runId:"reconcile-no-output",taskId:"task",expectedRevision:0,resolution:"completed",
       actorId:"operator:qa",evidence:"Provider confirms completion.",
-    } as never)).rejects.toThrow(/output is required/i);
+    } as never,async () => true)).rejects.toThrow(/output is required/i);
   });
   it("stores defensive copies and requires increasing revisions",async()=>{
     const store=new InMemoryWorkflowRunStore();
