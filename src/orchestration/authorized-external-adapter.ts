@@ -46,9 +46,9 @@ export async function executeAuthorizedExternalSkill(
     descriptor:request.descriptor,
     principalId:request.principalId,
     environment:request.environment,
-    approval:request.approval,
-    costReservation:request.costReservation,
-    now:request.now,
+    ...(request.approval ? {approval:request.approval} : {}),
+    ...(request.costReservation ? {costReservation:request.costReservation} : {}),
+    ...(request.now !== undefined ? {now:request.now} : {}),
   });
   if (!decision.allowed) throw new ExternalExecutionDeniedError(decision.reason);
   return executeExternalSkill(
