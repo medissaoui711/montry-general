@@ -183,6 +183,28 @@ describe("workflow runtime",()=>{
       .rejects.toThrow(/not declared retrySafe/i);
   });
 
+  it("never replays an indeterminate checkpoint, even when retrySafe is true", async () => {
+    const store = new InMemoryWorkflowRunStore();
+    const execute = vi.fn(() => ({ok:true}));
+    const registry = new SkillRegistry().register({
+      id:"checkpoint.reconcile",version:"1.0.0",retrySafe:true,
+      inputSchema:z.object({}),outputSchema:z.object({ok:z.boolean()}),execute,
+    });
+    const definition: WorkflowDefinition = {id:"indeterminate-replay-check",tasks:[
+      {id:"task",skill:"checkpoint.reconcile",input:{},dependsOn:[]},
+    ]};
+    await store.save({
+      schemaVersion:1,runId:"indeterminate-replay-1",workflowId:definition.id,
+      workflowFingerprint:fingerprintWorkflow(definition),revision:0,
+      tasks:[{taskId:"task",skillId:"checkpoint.reconcile",skillVersion:"1.0.0",status:"indeterminate",error:"Remote completion is unknown.",updatedAt:Date.now()}],
+      updatedAt:Date.now(),
+    });
+    await expect(executeWorkflow(definition,registry,{
+      runId:"indeterminate-replay-1",checkpointStore:store,resume:true,
+    })).rejects.toThrow(/indeterminate external outcome.*reconciliation/i);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it("runs independent tasks with the requested concurrency bound", async () => {
     let active = 0;
     let maximumActive = 0;
