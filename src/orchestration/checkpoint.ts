@@ -1,4 +1,6 @@
-import {createHash} from "node:crypto";
+import {createHash, randomUUID} from "node:crypto";
+import {mkdir, open, readFile, rename, stat, unlink} from "node:fs/promises";
+import path from "node:path";
 import {z} from "zod";
 import type {WorkflowDefinition} from "./contracts";
 import type {SkillRegistry} from "./registry";
@@ -147,6 +149,153 @@ export async function reconcileWorkflowTask(
   const swapped = await store.compareAndSwap(request.runId,parsed.revision,next);
   if (!swapped) throw new Error("Checkpoint revision conflict during reconciliation; reload before retrying.");
   return next;
+}
+
+export type FileWorkflowRunStoreOptions = {
+  /** Maximum time to wait for another local writer; defaults to 10000ms. */
+  lockWaitMs?: number;
+  /** Locks older than this are treated as abandoned; defaults to 60000ms. */
+  staleLockMs?: number;
+};
+
+/**
+ * Durable single-host checkpoint store. Uses atomic rename and a per-run exclusive
+ * lock file for compare-and-swap. It is not a distributed/multi-host database.
+ */
+export class FileWorkflowRunStore implements WorkflowRunStore {
+  private readonly directory: string;
+  private readonly lockWaitMs: number;
+  private readonly staleLockMs: number;
+
+  constructor(directory: string, options: FileWorkflowRunStoreOptions = {}) {
+    if (!directory.trim()) throw new Error("Checkpoint directory must be a non-empty path.");
+    this.directory = path.resolve(directory);
+    this.lockWaitMs = options.lockWaitMs ?? 10_000;
+    this.staleLockMs = options.staleLockMs ?? 60_000;
+    if (!Number.isInteger(this.lockWaitMs) || this.lockWaitMs < 1 || this.lockWaitMs > 120_000) {
+      throw new Error("lockWaitMs must be an integer between 1 and 120000.");
+    }
+    if (!Number.isInteger(this.staleLockMs) || this.staleLockMs < 1_000 || this.staleLockMs > 3_600_000) {
+      throw new Error("staleLockMs must be an integer between 1000 and 3600000.");
+    }
+  }
+
+  private key(runId: string): string {
+    return createHash("sha256").update(runId).digest("hex");
+  }
+
+  private filePath(runId: string): string {
+    return path.join(this.directory, `${this.key(runId)}.json`);
+  }
+
+  private async readUnlocked(runId: string): Promise<WorkflowCheckpoint | null> {
+    try {
+      const raw = await readFile(this.filePath(runId),"utf8");
+      return WorkflowCheckpointSchema.parse(JSON.parse(raw));
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  private async withRunLock<T>(runId: string, action: () => Promise<T>): Promise<T> {
+    await mkdir(this.directory,{recursive:true,mode:0o700});
+    const lockPath = path.join(this.directory,`${this.key(runId)}.lock`);
+    const deadline = Date.now() + this.lockWaitMs;
+    let lockHandle: Awaited<ReturnType<typeof open>> | undefined;
+    while (!lockHandle) {
+      try {
+        lockHandle = await open(lockPath,"wx",0o600);
+        await lockHandle.writeFile(JSON.stringify({pid:process.pid,createdAt:Date.now()}));
+        await lockHandle.sync();
+      } catch (error) {
+        if (lockHandle) { await lockHandle.close(); lockHandle = undefined; }
+        const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+        if (code !== "EEXIST") throw error;
+        try {
+          const lockStat = await stat(lockPath);
+          if (Date.now() - lockStat.mtimeMs > this.staleLockMs) {
+            await unlink(lockPath);
+            continue;
+          }
+        } catch (statError) {
+          const statCode = statError && typeof statError === "object" && "code" in statError ? statError.code : undefined;
+          if (statCode === "ENOENT") continue;
+          throw statError;
+        }
+        if (Date.now() >= deadline) throw new Error("Timed out waiting for the checkpoint run lock.");
+        await new Promise((resolve) => setTimeout(resolve,10));
+      }
+    }
+    try {
+      return await action();
+    } finally {
+      await lockHandle.close();
+      try { await unlink(lockPath); } catch (error) {
+        const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+        if (code !== "ENOENT") throw error;
+      }
+    }
+  }
+
+  private async writeAtomically(checkpoint: WorkflowCheckpoint): Promise<void> {
+    const parsed = WorkflowCheckpointSchema.parse(checkpoint);
+    const serialized = JSON.stringify(parsed);
+    if (serialized === undefined) throw new Error("Checkpoint cannot be serialized as JSON.");
+    // Verify JSON round-trip before replacing the previous durable snapshot.
+    WorkflowCheckpointSchema.parse(JSON.parse(serialized));
+    const target = this.filePath(parsed.runId);
+    const temporary = `${target}.${randomUUID()}.tmp`;
+    const handle = await open(temporary,"wx",0o600);
+    try {
+      await handle.writeFile(serialized,"utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      await rename(temporary,target);
+      // Best-effort directory sync persists the rename on filesystems that support it.
+      try {
+        const directoryHandle = await open(this.directory,"r");
+        try { await directoryHandle.sync(); } finally { await directoryHandle.close(); }
+      } catch { /* Some platforms do not allow opening/syncing directories. */ }
+    } finally {
+      try { await unlink(temporary); } catch { /* Renamed or already cleaned up. */ }
+    }
+  }
+
+  async load(runId: string): Promise<WorkflowCheckpoint | null> {
+    if (!runId.trim()) throw new Error("runId must be a non-empty string.");
+    await mkdir(this.directory,{recursive:true,mode:0o700});
+    return this.readUnlocked(runId);
+  }
+
+  async save(checkpoint: WorkflowCheckpoint): Promise<void> {
+    const parsed = WorkflowCheckpointSchema.parse(checkpoint);
+    await this.withRunLock(parsed.runId,async () => {
+      const current = await this.readUnlocked(parsed.runId);
+      if (current && parsed.revision <= current.revision) {
+        throw new Error(`Checkpoint revision must increase for run "${parsed.runId}".`);
+      }
+      await this.writeAtomically(parsed);
+    });
+  }
+
+  async compareAndSwap(runId: string, expectedRevision: number | null, checkpoint: WorkflowCheckpoint): Promise<boolean> {
+    const parsed = WorkflowCheckpointSchema.parse(checkpoint);
+    if (parsed.runId !== runId) throw new Error("Checkpoint runId does not match compareAndSwap key.");
+    return this.withRunLock(runId,async () => {
+      const current = await this.readUnlocked(runId);
+      if (expectedRevision === null ? current !== null : current?.revision !== expectedRevision) return false;
+      if (expectedRevision === null && parsed.revision !== 0) throw new Error("New checkpoints must start at revision zero.");
+      if (expectedRevision !== null && parsed.revision !== expectedRevision + 1) {
+        throw new Error("Checkpoint revision must increase by exactly one for compareAndSwap.");
+      }
+      await this.writeAtomically(parsed);
+      return true;
+    });
+  }
 }
 
 /** Deterministic SHA-256 over workflow identity, task order, inputs and dependencies. */
